@@ -1,6 +1,7 @@
 venv
+.venv
+.ipynb_checkpoints
 /dist/*
-/examples/.*
 __pycache__/
 *.pyc
 *.DS_Store
