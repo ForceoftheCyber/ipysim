@@ -1,6 +1,6 @@
 [project]
 name = "ipysim"
-version = "0.0.4"
+version = "0.0.5"
 description = "Quizzes for Jupyter"
 dependencies = [
     "ipython",
