@@ -20,7 +20,6 @@ from ipysim.params import params as default_params, state0 as default_state0
 
 
 def interactive_simulation(
-    *,
     params: Optional[Dict[str, float]] = None,
     state0: Optional[List[float]] = None,
     T: float = 1.0,
@@ -45,11 +44,12 @@ def interactive_simulation(
     def simulate_and_plot(Kp: float, Kd: float) -> None:
         t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
 
-        u_array = np.array([
-            -Kp * maglev_measurements(s, params["m"], params["mu0"])[0]
-            -Kd * maglev_measurements(s, params["m"], params["mu0"])[1]
-            for s in sol
-        ])
+        # This is not used?
+        # u_array = np.array([
+        #     -Kp * maglev_measurements(s, params["m"], params["mu0"])[0]
+        #     -Kd * maglev_measurements(s, params["m"], params["mu0"])[1]
+        #     for s in sol
+        # ])
 
         plt.figure(figsize=(12, 5))
 
