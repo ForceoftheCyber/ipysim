@@ -1,12 +1,15 @@
 [project]
 name = "ipysim"
-version = "0.0.1"
+version = "0.0.4"
 description = "Quizzes for Jupyter"
 dependencies = [
     "ipython",
     "ipywidgets",
     "requests",
-    "jupyter_bokeh"
+    "jupyter_bokeh",
+    "scipy",
+    "numpy",
+    "matplotlib"
 ]
 authors = [
   { name="Jørgen Galdal", email="jorgen.4@live.no" },

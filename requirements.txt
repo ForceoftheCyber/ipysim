@@ -1,0 +1,4 @@
+ipykernel
+
+# Installs an editable version of this package
+-e .
