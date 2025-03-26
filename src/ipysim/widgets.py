@@ -10,13 +10,13 @@ Provides slider controls for PD gains (Kp, Kd) and plots:
 Users can optionally pass in custom simulation parameters and initial state.
 """
 
-from typing import Callable, Optional, Dict, List
+from typing import Optional, Dict, List
 import numpy as np
 import matplotlib.pyplot as plt
 from ipywidgets import interact, FloatSlider
 
-from .core import simulate_maglev, maglev_measurements
-from .params import params as default_params, state0 as default_state0
+from ipysim.core import simulate_maglev, maglev_measurements
+from ipysim.params import params as default_params, state0 as default_state0
 
 
 def interactive_simulation(

@@ -1,2 +1,2 @@
-from .core import simulate_maglev
-from .widgets import interactive_simulation
+from ipysim.core import simulate_maglev
+from ipysim.widgets import interactive_simulation
