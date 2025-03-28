@@ -15,8 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ipywidgets import interact, FloatSlider, Button, Output, VBox
 from IPython.display import display
-import solara
-
+# import solara
 from ipysim.core import simulate_maglev, maglev_measurements
 from ipysim.params import params as default_params, state0 as default_state0
 
@@ -83,22 +82,22 @@ def interactive_simulation(
 
     display(VBox([print_button, out]))
 
-@solara.component
-def MaglevControl(
-    params: Optional[Dict[str, float]] = None,
-    state0: Optional[List[float]] = None,
-    T: float = 1.0,
-    dt: float = 0.001,
-    Kp_default: float = 600.0,
-    Kd_default: float = 30.0,
-):
-    Kp = solara.use_reactive(Kp_default)
-    Kd = solara.use_reactive(Kd_default)
+# @solara.component
+# def MaglevControl(
+#     params: Optional[Dict[str, float]] = None,
+#     state0: Optional[List[float]] = None,
+#     T: float = 1.0,
+#     dt: float = 0.001,
+#     Kp_default: float = 600.0,
+#     Kd_default: float = 30.0,
+# ):
+#     Kp = solara.use_reactive(Kp_default)
+#     Kd = solara.use_reactive(Kd_default)
 
-    def simulate_and_plot(Kp_val: float, Kd_val: float) -> None:
-        simulate_maglev(Kp_val, Kd_val, T, dt, state0 or default_state0, params or default_params)
+#     def simulate_and_plot(Kp_val: float, Kd_val: float) -> None:
+#         simulate_maglev(Kp_val, Kd_val, T, dt, state0 or default_state0, params or default_params)
 
-    solara.SliderFloat("Kp", value=Kp, min=0, max=1000, step=10.0)
-    solara.SliderFloat("Kd", value=Kd, min=0, max=200, step=5.0)
+#     solara.SliderFloat("Kp", value=Kp, min=0, max=1000, step=10.0)
+#     solara.SliderFloat("Kd", value=Kd, min=0, max=200, step=5.0)
 
-    # simulate_and_plot(Kp.value, Kd.value)
+#     # simulate_and_plot(Kp.value, Kd.value)
