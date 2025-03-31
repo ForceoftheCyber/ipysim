@@ -76,29 +76,47 @@ def interactive_simulation(
         Returns:
             None
         """
-        global t, sol
-        t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
+        global t, sol, last_valid_Kp, last_valid_Kd
+        try:
+            t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
 
-        plt.close('all')  # Close existing figures
-        plt.figure(figsize=(12, 5))
-        plt.subplot(1, 2, 1)
-        plt.plot(t, sol[:, 1], label='z (height)')
-        plt.plot(t, sol[:, 0], label='x (horizontal)')
-        plt.xlabel('Time [s]')
-        plt.ylabel('Position [m]')
-        plt.title('Position of levitating magnet')
-        plt.legend()
-        plt.grid(True)
+            # Validate simulation results
+            if t is None or sol is None or np.any(np.isnan(sol)) or np.any(np.isinf(sol)):
+                raise ValueError("Simulation produced invalid results.")
 
-        plt.subplot(1, 2, 2)
-        plt.plot(sol[:, 0], sol[:, 2])
-        plt.xlabel('x')
-        plt.ylabel('theta')
-        plt.title('Phase plot: x vs theta')
-        plt.grid(True)
+            # Update last valid values
+            last_valid_Kp = Kp
+            last_valid_Kd = Kd
 
-        plt.tight_layout()
-        plt.show()
+            with out:
+                out.clear_output(wait=True)
+                plt.figure(figsize=(12, 5))
+                plt.subplot(1, 2, 1)
+                plt.plot(t, sol[:, 1], label='z (height)')
+                plt.plot(t, sol[:, 0], label='x (horizontal)')
+                plt.xlabel('Time [s]')
+                plt.ylabel('Position [m]')
+                plt.title('Position of levitating magnet')
+                plt.legend()
+                plt.grid(True)
+
+                plt.subplot(1, 2, 2)
+                plt.plot(sol[:, 0], sol[:, 2])
+                plt.xlabel('x')
+                plt.ylabel('theta')
+                plt.title('Phase plot: x vs theta')
+                plt.grid(True)
+
+                plt.tight_layout()
+                plt.show()
+
+        except Exception as e:
+            # Roll back to last valid values
+            with out:
+                out.clear_output(wait=True)
+                print(f"Error: {e}. Rolling back to last valid parameters (Kp={last_valid_Kp}, Kd={last_valid_Kd}).")
+            Kp_slider.value = last_valid_Kp
+            Kd_slider.value = last_valid_Kd
 
     def print_arrays(_):
         """
@@ -119,7 +137,8 @@ def interactive_simulation(
                 print("Simulation not yet run.")
 
     print_button.on_click(print_arrays)
-
+    Kp_slider = FloatSlider(value=Kp_default, min=0, max=1000, step=10.0, description='Kp')
+    Kd_slider = FloatSlider(value=Kd_default, min=0, max=200, step=5.0, description='Kd')
     # Display the interactive sliders and button/output separately
     interact(
         simulate_and_plot,
