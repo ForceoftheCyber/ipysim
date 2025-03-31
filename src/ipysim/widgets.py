@@ -17,10 +17,8 @@ from ipywidgets import interact, FloatSlider, Button, Output, VBox
 from IPython.display import display
 import warnings
 from scipy.integrate import ODEintWarning
-# import solara
-from ipysim.core import simulate_maglev, maglev_measurements
+from ipysim.core import simulate_maglev
 from ipysim.params import params as default_params, state0 as default_state0
-from ipysim.evaluation import SimulationEvaluator
 
 # Globals for external use
 t = None
@@ -134,10 +132,8 @@ def interactive_simulation(
                 return
 
             if evaluation_function(sol, t):
-                #print(f"Correct! Kp={Kp_slider.value}, Kd={Kd_slider.value} match the target values.")
                 print("Correct!")
             else:
-                # print(f"Incorrect. Kp={Kp_slider.value}, Kd={Kd_slider.value} do not match the target values.")
                 print("Incorrect!")
 
     Kp_slider = FloatSlider(value=Kp_default, min=0, max=1000, step=10.0, description='Kp')
