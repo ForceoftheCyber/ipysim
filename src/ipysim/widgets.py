@@ -10,7 +10,7 @@ Provides slider controls for PD gains (Kp, Kd) and plots:
 Users can optionally pass in custom simulation parameters and initial state.
 """
 
-from typing import Optional, Dict, List
+from typing import Callable, Optional, Dict, List
 import numpy as np
 import matplotlib.pyplot as plt
 from ipywidgets import interact, FloatSlider, Button, Output, VBox
@@ -37,8 +37,7 @@ def interactive_simulation(
     dt: float = 0.001,
     Kp_default: float = 600.0,
     Kd_default: float = 30.0,
-    target_kp: float = 600.0,
-    target_kd: float = 30.0,
+    evaluation_function: Callable[[np.ndarray, np.ndarray], bool] | None = None,
 ) -> None:
     """
     Create an interactive simulation for the maglev system using Jupyter widgets.
@@ -125,7 +124,16 @@ def interactive_simulation(
         """
         with result_output:
             result_output.clear_output(wait=True)
-            if Kp_slider.value == target_kp and Kd_slider.value == target_kd:
+
+            # Button that calls this function will not be shown if evaluation_function is None
+            assert evaluation_function  
+            
+            global sol, t
+            if sol is None or t is None:
+                print("Simulation has not been run, change the parameters.")
+                return
+
+            if evaluation_function(sol, t):
                 #print(f"Correct! Kp={Kp_slider.value}, Kd={Kd_slider.value} match the target values.")
                 print("Correct!")
             else:
@@ -143,4 +151,8 @@ def interactive_simulation(
         Kd=Kd_slider
     )
 
-    display(VBox([evaluate_button, result_output, out]))
+    output_widgets = [out]
+    if evaluation_function is not None:
+        # Adds widgets for evalution
+        output_widgets += [evaluate_button, result_output]
+    display(VBox(output_widgets))
