@@ -20,6 +20,7 @@ from scipy.integrate import ODEintWarning
 # import solara
 from ipysim.core import simulate_maglev, maglev_measurements
 from ipysim.params import params as default_params, state0 as default_state0
+from ipysim.evaluation import SimulationEvaluator
 
 # Globals for external use
 t = None
@@ -36,6 +37,8 @@ def interactive_simulation(
     dt: float = 0.001,
     Kp_default: float = 600.0,
     Kd_default: float = 30.0,
+    target_kp: float = 600.0,
+    target_kd: float = 30.0,
 ) -> None:
     """
     Create an interactive simulation for the maglev system using Jupyter widgets.
@@ -43,6 +46,7 @@ def interactive_simulation(
     This function allows users to:
     - Adjust the proportional (`Kp`) and derivative (`Kd`) gains using sliders.
     - Visualize the system's behavior over time.
+    - Evaluate if the student-selected `Kp` and `Kd` match the target values.
 
     Args:
         params (Optional[Dict[str, float]]): Simulation parameters (e.g., mass, magnetic properties).
@@ -51,6 +55,8 @@ def interactive_simulation(
         dt (float): Time step for the simulation.
         Kp_default (float): Default proportional gain for the PD controller.
         Kd_default (float): Default derivative gain for the PD controller.
+        target_kp (float): Target proportional gain for evaluation.
+        target_kd (float): Target derivative gain for evaluation.
 
     Returns:
         None
@@ -58,12 +64,12 @@ def interactive_simulation(
     # Suppress ODEintWarning
     warnings.filterwarnings("ignore", category=ODEintWarning)
 
-    global Kp, Kd, last_valid_Kp, last_valid_Kd
+    global t, sol
     params = params or default_params
     state0 = state0 or default_state0
 
     out = Output()
-    print_button = Button(description="Output")
+    result_output = Output()
 
     def simulate_and_plot(Kp: float, Kd: float) -> None:
         """
@@ -76,17 +82,9 @@ def interactive_simulation(
         Returns:
             None
         """
-        global t, sol, last_valid_Kp, last_valid_Kd
+        global t, sol
         try:
             t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
-
-            # Validate simulation results
-            if t is None or sol is None or np.any(np.isnan(sol)) or np.any(np.isinf(sol)):
-                raise ValueError("Simulation produced invalid results.")
-
-            # Update last valid values
-            last_valid_Kp = Kp
-            last_valid_Kd = Kd
 
             with out:
                 out.clear_output(wait=True)
@@ -111,16 +109,13 @@ def interactive_simulation(
                 plt.show()
 
         except Exception as e:
-            # Roll back to last valid values
             with out:
                 out.clear_output(wait=True)
-                print(f"Error: {e}. Rolling back to last valid parameters (Kp={last_valid_Kp}, Kd={last_valid_Kd}).")
-            Kp_slider.value = last_valid_Kp
-            Kd_slider.value = last_valid_Kd
+                print(f"Error: {e}")
 
-    def print_arrays(_):
+    def evaluate_parameters(_) -> None:
         """
-        Print the simulation time and solution arrays.
+        Evaluate if the current Kp and Kd match the target values.
 
         Args:
             _ : Unused argument (required for button callback).
@@ -128,42 +123,24 @@ def interactive_simulation(
         Returns:
             None
         """
-        with out:
-            out.clear_output()
-            if t is not None and sol is not None:
-                print(f"Time: (len={len(t)}): {t[:5]} ...")
-                print(f"Solution: (shape={sol.shape}):\n{sol[:5]} ...")
+        with result_output:
+            result_output.clear_output(wait=True)
+            if Kp_slider.value == target_kp and Kd_slider.value == target_kd:
+                #print(f"Correct! Kp={Kp_slider.value}, Kd={Kd_slider.value} match the target values.")
+                print("Correct!")
             else:
-                print("Simulation not yet run.")
+                # print(f"Incorrect. Kp={Kp_slider.value}, Kd={Kd_slider.value} do not match the target values.")
+                print("Incorrect!")
 
-    print_button.on_click(print_arrays)
     Kp_slider = FloatSlider(value=Kp_default, min=0, max=1000, step=10.0, description='Kp')
     Kd_slider = FloatSlider(value=Kd_default, min=0, max=200, step=5.0, description='Kd')
-    # Display the interactive sliders and button/output separately
+    evaluate_button = Button(description="Evaluate")
+    evaluate_button.on_click(evaluate_parameters)
+
     interact(
         simulate_and_plot,
-        Kp=FloatSlider(value=Kp_default, min=0, max=1000, step=10.0, description='Kp'),
-        Kd=FloatSlider(value=Kd_default, min=0, max=200, step=5.0, description='Kd')
+        Kp=Kp_slider,
+        Kd=Kd_slider
     )
 
-    display(VBox([print_button, out]))
-
-# @solara.component
-# def MaglevControl(
-#     params: Optional[Dict[str, float]] = None,
-#     state0: Optional[List[float]] = None,
-#     T: float = 1.0,
-#     dt: float = 0.001,
-#     Kp_default: float = 600.0,
-#     Kd_default: float = 30.0,
-# ):
-#     Kp = solara.use_reactive(Kp_default)
-#     Kd = solara.use_reactive(Kd_default)
-
-#     def simulate_and_plot(Kp_val: float, Kd_val: float) -> None:
-#         simulate_maglev(Kp_val, Kd_val, T, dt, state0 or default_state0, params or default_params)
-
-#     solara.SliderFloat("Kp", value=Kp, min=0, max=1000, step=10.0)
-#     solara.SliderFloat("Kd", value=Kd, min=0, max=200, step=5.0)
-
-#     # simulate_and_plot(Kp.value, Kd.value)
+    display(VBox([evaluate_button, result_output, out]))
