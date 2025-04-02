@@ -15,8 +15,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ipywidgets import interact, FloatSlider, Button, Output, VBox
 from IPython.display import display
-import warnings
-from scipy.integrate import ODEintWarning
 from ipysim.core import simulate_maglev
 from ipysim.params import params as default_params, state0 as default_state0
 
@@ -58,8 +56,8 @@ def interactive_simulation(
     Returns:
         None
     """
-    # Suppress ODEintWarning
-    warnings.filterwarnings("ignore", category=ODEintWarning)
+    # # Suppress ODEintWarning
+    # warnings.filterwarnings("ignore", category=ODEintWarning)
 
     global t, sol
     params = params or default_params
