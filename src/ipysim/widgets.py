@@ -13,7 +13,8 @@ Users can optionally pass in custom simulation parameters and initial state.
 from typing import Callable, Optional, Dict, List
 import numpy as np
 import matplotlib.pyplot as plt
-from ipywidgets import interact, FloatSlider, Button, Output, VBox
+import warnings
+from ipywidgets import interact, FloatSlider, Button, Output, VBox, HTML
 from IPython.display import display
 from ipysim.core import simulate_maglev
 from ipysim.params import params as default_params, state0 as default_state0
@@ -33,6 +34,8 @@ def interactive_simulation(
     dt: float = 0.001,
     Kp_default: float = 600.0,
     Kd_default: float = 30.0,
+    Kp_min: float = 20.0,  # Increased minimum Kp to prevent computational errors
+    Kd_min: float = 10.0,  # Increased minimum Kd to prevent computational errors
     evaluation_function: Callable[[np.ndarray, np.ndarray], bool] | None = None,
 ) -> None:
     """
@@ -50,21 +53,51 @@ def interactive_simulation(
         dt (float): Time step for the simulation.
         Kp_default (float): Default proportional gain for the PD controller.
         Kd_default (float): Default derivative gain for the PD controller.
-        target_kp (float): Target proportional gain for evaluation.
-        target_kd (float): Target derivative gain for evaluation.
+        Kp_min (float): Minimum allowed value for Kp to prevent computational errors.
+        Kd_min (float): Minimum allowed value for Kd to prevent computational errors.
 
     Returns:
         None
     """
-    # # Suppress ODEintWarning
-    # warnings.filterwarnings("ignore", category=ODEintWarning)
 
-    global t, sol
+    global t, sol, Kp, Kd, last_valid_Kp, last_valid_Kd
     params = params or default_params
     state0 = state0 or default_state0
+    
+    # Initialize last valid values with defaults
+    last_valid_Kp = max(Kp_default, Kp_min)
+    last_valid_Kd = max(Kd_default, Kd_min)
 
     out = Output()
     result_output = Output()
+    status_message = HTML(value="")
+
+    def validate_parameters(Kp: float, Kd: float) -> bool:
+        """Validate controller parameters to prevent computation errors."""
+        if Kp < Kp_min:
+            status_message.value = f"<span style='color:red'>Warning: Kp must be at least {Kp_min}</span>"
+            return False
+        if Kd < Kd_min:
+            status_message.value = f"<span style='color:red'>Warning: Kd must be at least {Kd_min}</span>"
+            return False
+        status_message.value = ""
+        return True
+
+    def is_valid_solution(solution: np.ndarray) -> bool:
+        """Check if the solution is valid and doesn't contain extreme values."""
+        if solution is None or solution.size == 0:
+            return False
+            
+        # Check for NaN or Inf values
+        if np.isnan(solution).any() or np.isinf(solution).any():
+            return False
+            
+        # Check for extreme values that might cause overflow
+        max_abs_value = np.max(np.abs(solution))
+        if max_abs_value > 1e10:  # If any value is extremely large
+            return False
+            
+        return True
 
     def simulate_and_plot(Kp: float, Kd: float) -> None:
         """
@@ -77,36 +110,114 @@ def interactive_simulation(
         Returns:
             None
         """
-        global t, sol
+        global t, sol, last_valid_Kp, last_valid_Kd
+        
+        # Validate parameters before simulation
+        if not validate_parameters(Kp, Kd):
+            # Use the last valid values instead
+            Kp_slider.value = last_valid_Kp
+            Kd_slider.value = last_valid_Kd
+            return
+        
         try:
+            # Store current values before simulation attempt
+            attempted_Kp = Kp
+            attempted_Kd = Kd
+            
             t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
+            
+            # Validate the solution
+            if not is_valid_solution(sol):
+                with out:
+                    out.clear_output(wait=True)
+                    print(f"Simulation with Kp={attempted_Kp}, Kd={attempted_Kd} produced unstable results.")
+                    print(f"Rolling back to last valid values: Kp={last_valid_Kp}, Kd={last_valid_Kd}")
+                
+                # Roll back to last valid values
+                Kp_slider.value = last_valid_Kp
+                Kd_slider.value = last_valid_Kd
+                
+                # Re-run simulation with last valid parameters
+                t, sol = simulate_maglev(last_valid_Kp, last_valid_Kd, T, dt, state0, params)
+                
+                # Make sure even this solution is valid
+                if not is_valid_solution(sol):
+                    with out:
+                        out.clear_output(wait=True)
+                        print("Even the last valid settings produced unstable results.")
+                        print("Please try with different Kp and Kd values.")
+                    return
+            else:
+                # Store successful values only if the simulation was valid
+                last_valid_Kp = Kp
+                last_valid_Kd = Kd
 
             with out:
                 out.clear_output(wait=True)
-                plt.figure(figsize=(12, 5))
-                plt.subplot(1, 2, 1)
-                plt.plot(t, sol[:, 1], label='z (height)')
-                plt.plot(t, sol[:, 0], label='x (horizontal)')
-                plt.xlabel('Time [s]')
-                plt.ylabel('Position [m]')
-                plt.title('Position of levitating magnet')
-                plt.legend()
-                plt.grid(True)
-
-                plt.subplot(1, 2, 2)
-                plt.plot(sol[:, 0], sol[:, 2])
-                plt.xlabel('x')
-                plt.ylabel('theta')
-                plt.title('Phase plot: x vs theta')
-                plt.grid(True)
-
-                plt.tight_layout()
-                plt.show()
+                
+                # Additional safety check before plotting
+                try:
+                    plt.figure(figsize=(12, 5))
+                    
+                    # First subplot
+                    plt.subplot(1, 2, 1)
+                    plt.plot(t, sol[:, 1], label='z (height)')
+                    plt.plot(t, sol[:, 0], label='x (horizontal)')
+                    plt.xlabel('Time [s]')
+                    plt.ylabel('Position [m]')
+                    plt.title('Position of levitating magnet')
+                    plt.legend()
+                    plt.grid(True)
+                    
+                    # Second subplot
+                    plt.subplot(1, 2, 2)
+                    plt.plot(sol[:, 0], sol[:, 2])
+                    plt.xlabel('x')
+                    plt.ylabel('theta')
+                    plt.title('Phase plot: x vs theta')
+                    plt.grid(True)
+                    
+                    plt.tight_layout()
+                    plt.show()
+                except (ValueError, OverflowError) as e:
+                    # Catch specific errors during plotting
+                    plt.close('all')  # Close any partially created figures
+                    print(f"Error during plotting: {str(e)}")
+                    print(f"The simulation may have produced extreme values that cannot be displayed.")
+                    print(f"Try different parameters with higher Kp and Kd values.")
 
         except Exception as e:
             with out:
                 out.clear_output(wait=True)
+                # Roll back to last valid values
+                Kp_slider.value = last_valid_Kp
+                Kd_slider.value = last_valid_Kd
+                
+                # Display error message with rollback information
                 print(f"Error: {e}")
+                print(f"Rolling back to last valid values: Kp={last_valid_Kp}, Kd={last_valid_Kd}")
+                
+                # Use last valid values to show a working plot
+                if t is not None and sol is not None:
+                    plt.figure(figsize=(12, 5))
+                    plt.subplot(1, 2, 1)
+                    plt.plot(t, sol[:, 1], label='z (height)')
+                    plt.plot(t, sol[:, 0], label='x (horizontal)')
+                    plt.xlabel('Time [s]')
+                    plt.ylabel('Position [m]')
+                    plt.title('Position of levitating magnet')
+                    plt.legend()
+                    plt.grid(True)
+
+                    plt.subplot(1, 2, 2)
+                    plt.plot(sol[:, 0], sol[:, 2])
+                    plt.xlabel('x')
+                    plt.ylabel('theta')
+                    plt.title('Phase plot: x vs theta')
+                    plt.grid(True)
+
+                    plt.tight_layout()
+                    plt.show()
 
     def evaluate_parameters(_) -> None:
         """
@@ -134,8 +245,8 @@ def interactive_simulation(
             else:
                 print("Incorrect!")
 
-    Kp_slider = FloatSlider(value=Kp_default, min=0, max=1000, step=10.0, description='Kp')
-    Kd_slider = FloatSlider(value=Kd_default, min=0, max=200, step=5.0, description='Kd')
+    Kp_slider = FloatSlider(value=max(Kp_default, Kp_min), min=Kp_min, max=1000, step=10.0, description='Kp')
+    Kd_slider = FloatSlider(value=max(Kd_default, Kd_min), min=Kd_min, max=200, step=5.0, description='Kd')
     evaluate_button = Button(description="Evaluate")
     evaluate_button.on_click(evaluate_parameters)
 
@@ -145,7 +256,7 @@ def interactive_simulation(
         Kd=Kd_slider
     )
 
-    output_widgets = [out]
+    output_widgets = [status_message, out]
     if evaluation_function is not None:
         # Adds widgets for evalution
         output_widgets += [evaluate_button, result_output]
