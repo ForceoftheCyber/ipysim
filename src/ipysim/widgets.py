@@ -50,8 +50,6 @@ def interactive_simulation(
         dt (float): Time step for the simulation.
         Kp_default (float): Default proportional gain for the PD controller.
         Kd_default (float): Default derivative gain for the PD controller.
-        target_kp (float): Target proportional gain for evaluation.
-        target_kd (float): Target derivative gain for evaluation.
 
     Returns:
         None
