@@ -14,8 +14,12 @@ from typing import Callable, Optional, Dict, List
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
+import contextlib
+import io
+import sys
+import os
 from ipywidgets import interact, FloatSlider, Button, Output, VBox, HTML
-from IPython.display import display
+from IPython.display import display, Javascript
 from ipysim.core import simulate_maglev
 from ipysim.params import params as default_params, state0 as default_state0
 
@@ -26,6 +30,49 @@ Kp = None
 Kd = None
 last_valid_Kp = None
 last_valid_Kd = None
+
+# Context manager to redirect stderr to browser console
+@contextlib.contextmanager
+def redirect_stderr_to_console():
+    """
+    Context manager to redirect stderr output to the browser's JavaScript console.
+    
+    This captures ipywidgets warnings and errors and displays them in the browser console
+    instead of in the notebook output.
+    """
+    # Create a StringIO object to capture stderr
+    stderr_capture = io.StringIO()
+    
+    # Save the original stderr
+    old_stderr = sys.stderr
+    
+    try:
+        # Redirect stderr to our capture object
+        sys.stderr = stderr_capture
+        yield  # Execute the code block inside the with statement
+    finally:
+        # Get the captured content
+        stderr_content = stderr_capture.getvalue()
+        
+        # Restore the original stderr
+        sys.stderr = old_stderr
+        
+        # If there's content, display it in the browser console
+        if stderr_content:
+            # Escape quotes and newlines for JavaScript
+            stderr_content = stderr_content.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n')
+            # Send to browser console wrapped in a try-catch to prevent errors
+            js_code = f"""
+            try {{
+                console.error('[IPySim error message]: ' + '{stderr_content}');
+            }} catch(e) {{
+                console.error('Logging failed')
+            }}
+            """
+            try:
+                display(Javascript(js_code))
+            except:
+                pass
 
 def interactive_simulation(
     params: Optional[Dict[str, float]] = None,
@@ -68,17 +115,13 @@ def interactive_simulation(
 
     out = Output()
     result_output = Output()
-    status_message = HTML(value="")
 
     def validate_parameters(Kp: float, Kd: float) -> bool:
         """Validate controller parameters to prevent computation errors."""
         if Kp < Kp_min:
-            status_message.value = f"<span style='color:red'>Warning: Kp must be at least {Kp_min}</span>"
             return False
         if Kd < Kd_min:
-            status_message.value = f"<span style='color:red'>Warning: Kd must be at least {Kd_min}</span>"
             return False
-        status_message.value = ""
         return True
 
     def is_valid_solution(solution: np.ndarray) -> bool:
@@ -113,8 +156,9 @@ def interactive_simulation(
         # Validate parameters before simulation
         if not validate_parameters(Kp, Kd):
             # Use the last valid values instead
-            Kp_slider.value = last_valid_Kp
-            Kd_slider.value = last_valid_Kd
+            with redirect_stderr_to_console():
+                Kp_slider.value = last_valid_Kp
+                Kd_slider.value = last_valid_Kd
             return
         
         try:
@@ -122,7 +166,8 @@ def interactive_simulation(
             attempted_Kp = Kp
             attempted_Kd = Kd
             
-            t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
+            with redirect_stderr_to_console():
+                t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
             
             # Validate the solution
             if not is_valid_solution(sol):
@@ -132,11 +177,13 @@ def interactive_simulation(
                     print(f"Rolling back to last valid values: Kp={last_valid_Kp}, Kd={last_valid_Kd}")
                 
                 # Roll back to last valid values
-                Kp_slider.value = last_valid_Kp
-                Kd_slider.value = last_valid_Kd
+                with redirect_stderr_to_console():
+                    Kp_slider.value = last_valid_Kp
+                    Kd_slider.value = last_valid_Kd
                 
                 # Re-run simulation with last valid parameters
-                t, sol = simulate_maglev(last_valid_Kp, last_valid_Kd, T, dt, state0, params)
+                with redirect_stderr_to_console():
+                    t, sol = simulate_maglev(last_valid_Kp, last_valid_Kd, T, dt, state0, params)
                 
                 # Make sure even this solution is valid
                 if not is_valid_solution(sol):
@@ -155,31 +202,33 @@ def interactive_simulation(
                 
                 # Additional safety check before plotting
                 try:
-                    plt.figure(figsize=(12, 5))
-                    
-                    # First subplot
-                    plt.subplot(1, 2, 1)
-                    plt.plot(t, sol[:, 1], label='z (height)')
-                    plt.plot(t, sol[:, 0], label='x (horizontal)')
-                    plt.xlabel('Time [s]')
-                    plt.ylabel('Position [m]')
-                    plt.title('Position of levitating magnet')
-                    plt.legend()
-                    plt.grid(True)
-                    
-                    # Second subplot
-                    plt.subplot(1, 2, 2)
-                    plt.plot(sol[:, 0], sol[:, 2])
-                    plt.xlabel('x')
-                    plt.ylabel('theta')
-                    plt.title('Phase plot: x vs theta')
-                    plt.grid(True)
-                    
-                    plt.tight_layout()
-                    plt.show()
+                    with redirect_stderr_to_console():
+                        plt.figure(figsize=(12, 5))
+                        
+                        # First subplot
+                        plt.subplot(1, 2, 1)
+                        plt.plot(t, sol[:, 1], label='z (height)')
+                        plt.plot(t, sol[:, 0], label='x (horizontal)')
+                        plt.xlabel('Time [s]')
+                        plt.ylabel('Position [m]')
+                        plt.title('Position of levitating magnet')
+                        plt.legend()
+                        plt.grid(True)
+                        
+                        # Second subplot
+                        plt.subplot(1, 2, 2)
+                        plt.plot(sol[:, 0], sol[:, 2])
+                        plt.xlabel('x')
+                        plt.ylabel('theta')
+                        plt.title('Phase plot: x vs theta')
+                        plt.grid(True)
+                        
+                        plt.tight_layout()
+                        plt.show()
                 except (ValueError, OverflowError) as e:
                     # Catch specific errors during plotting
-                    plt.close('all')  # Close any partially created figures
+                    with redirect_stderr_to_console():
+                        plt.close('all')  # Close any partially created figures
                     print(f"Error during plotting: {str(e)}")
                     print(f"The simulation may have produced extreme values that cannot be displayed.")
                     print(f"Try different parameters with higher Kp and Kd values.")
@@ -188,8 +237,9 @@ def interactive_simulation(
             with out:
                 out.clear_output(wait=True)
                 # Roll back to last valid values
-                Kp_slider.value = last_valid_Kp
-                Kd_slider.value = last_valid_Kd
+                with redirect_stderr_to_console():
+                    Kp_slider.value = last_valid_Kp
+                    Kd_slider.value = last_valid_Kd
                 
                 # Display error message with rollback information
                 print(f"Error: {e}")
@@ -197,25 +247,26 @@ def interactive_simulation(
                 
                 # Use last valid values to show a working plot
                 if t is not None and sol is not None:
-                    plt.figure(figsize=(12, 5))
-                    plt.subplot(1, 2, 1)
-                    plt.plot(t, sol[:, 1], label='z (height)')
-                    plt.plot(t, sol[:, 0], label='x (horizontal)')
-                    plt.xlabel('Time [s]')
-                    plt.ylabel('Position [m]')
-                    plt.title('Position of levitating magnet')
-                    plt.legend()
-                    plt.grid(True)
+                    with redirect_stderr_to_console():
+                        plt.figure(figsize=(12, 5))
+                        plt.subplot(1, 2, 1)
+                        plt.plot(t, sol[:, 1], label='z (height)')
+                        plt.plot(t, sol[:, 0], label='x (horizontal)')
+                        plt.xlabel('Time [s]')
+                        plt.ylabel('Position [m]')
+                        plt.title('Position of levitating magnet')
+                        plt.legend()
+                        plt.grid(True)
 
-                    plt.subplot(1, 2, 2)
-                    plt.plot(sol[:, 0], sol[:, 2])
-                    plt.xlabel('x')
-                    plt.ylabel('theta')
-                    plt.title('Phase plot: x vs theta')
-                    plt.grid(True)
+                        plt.subplot(1, 2, 2)
+                        plt.plot(sol[:, 0], sol[:, 2])
+                        plt.xlabel('x')
+                        plt.ylabel('theta')
+                        plt.title('Phase plot: x vs theta')
+                        plt.grid(True)
 
-                    plt.tight_layout()
-                    plt.show()
+                        plt.tight_layout()
+                        plt.show()
 
     def evaluate_parameters(_) -> None:
         """
@@ -238,24 +289,27 @@ def interactive_simulation(
                 print("Simulation has not been run, change the parameters.")
                 return
 
-            if evaluation_function(sol, t):
-                print("Correct!")
-            else:
-                print("Incorrect!")
+            with redirect_stderr_to_console():
+                if evaluation_function(sol, t):
+                    print("Correct!")
+                else:
+                    print("Incorrect!")
 
     Kp_slider = FloatSlider(value=max(Kp_default, Kp_min), min=Kp_min, max=1000, step=10.0, description='Kp')
     Kd_slider = FloatSlider(value=max(Kd_default, Kd_min), min=Kd_min, max=200, step=5.0, description='Kd')
     evaluate_button = Button(description="Evaluate")
     evaluate_button.on_click(evaluate_parameters)
 
-    interact(
-        simulate_and_plot,
-        Kp=Kp_slider,
-        Kd=Kd_slider
-    )
+    with redirect_stderr_to_console():
+        interact(
+            simulate_and_plot,
+            Kp=Kp_slider,
+            Kd=Kd_slider
+        )
 
-    output_widgets = [status_message, out]
+    output_widgets = [out]
     if evaluation_function is not None:
         # Adds widgets for evalution
         output_widgets += [evaluate_button, result_output]
-    display(VBox(output_widgets))
+    with redirect_stderr_to_console():
+        display(VBox(output_widgets))
