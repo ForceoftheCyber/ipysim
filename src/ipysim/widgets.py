@@ -53,8 +53,6 @@ def interactive_simulation(
         dt (float): Time step for the simulation.
         Kp_default (float): Default proportional gain for the PD controller.
         Kd_default (float): Default derivative gain for the PD controller.
-        Kp_min (float): Minimum allowed value for Kp to prevent computational errors.
-        Kd_min (float): Minimum allowed value for Kd to prevent computational errors.
 
     Returns:
         None
