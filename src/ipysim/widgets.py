@@ -34,8 +34,8 @@ def interactive_simulation(
     dt: float = 0.001,
     Kp_default: float = 600.0,
     Kd_default: float = 30.0,
-    Kp_min: float = 20.0,  # Increased minimum Kp to prevent computational errors
-    Kd_min: float = 10.0,  # Increased minimum Kd to prevent computational errors
+    Kp_min: float = 20.0,  
+    Kd_min: float = 10.0,  
     evaluation_function: Callable[[np.ndarray, np.ndarray], bool] | None = None,
 ) -> None:
     """
