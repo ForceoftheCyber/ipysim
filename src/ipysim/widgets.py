@@ -146,64 +146,104 @@ def interactive_simulation(
 
     def create_maglev_animation(t, sol):
         """
-        Create a base64 frame animation using JavaScript and HTML.
+        Create an interactive animation of the maglev system using matplotlib's FuncAnimation.
+        
+        Args:
+            t: Time array
+            sol: Solution array containing state variables
+            
         Returns:
-            IPythonHTML: HTML+JS snippet with a styled animation player.
+            IPythonHTML: Interactive HTML animation
         """
-
         try:
-            # Prepare subsampled trajectory
-            target_frames = min(100, len(t))
-            frame_skip = max(1, len(t) // target_frames)
-            t_sub = t[::frame_skip]
-            x = sol[::frame_skip, 0]
-            z = sol[::frame_skip, 1]
-            theta = sol[::frame_skip, 2]
-
-            # Generate PNG base64 frames
-            base64_frames = []
-            for i in range(len(t_sub)):
-                fig, ax = plt.subplots(figsize=(4, 3))
-                ax.set_xlim(-0.05, 0.05)
-                ax.set_ylim(0, 0.1)
-                ax.set_aspect('equal')
-                ax.set_title(f"t = {t_sub[i]:.2f}s")
-
-                # Draw base and magnet
-                ax.add_patch(Rectangle((-0.06, 0), 0.12, 0.01, fc='#3a3a3a'))
-                for pos in [-0.03, -0.01, 0.01, 0.03]:
-                    ax.add_patch(Circle((pos, 0.01), 0.005, fc='#e63946'))
-                ax.add_patch(Ellipse((x[i], z[i]), 0.024, 0.006, angle=np.degrees(theta[i]), fc='#1d71b8'))
-
-                # Save to base64
-                buf = io.BytesIO()
-                plt.savefig(buf, format="png")
-                buf.seek(0)
-                b64 = base64.b64encode(buf.read()).decode("utf-8")
-                base64_frames.append(b64)
-                plt.close(fig)
-
-            # Generate HTML and JS animation
-            js_script = f"""
-            <div id="maglev-animation" style="background:#f8f9fa;padding:1em;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);text-align:center;">
-                <h3 style="font-family:Arial,sans-serif;color:#1d3557;">Magnetic Levitation Animation</h3>
-                <img id="maglev-frame" style="width:100%;max-width:400px;border:1px solid #ccc;border-radius:6px;" />
+            # Use full simulation data without downsampling for highest granularity
+            # Only downsample if the dataset is extremely large to prevent browser issues
+            max_frames = 1000  # Maximum number of frames to prevent browser slowdown
+            if len(t) > max_frames:
+                frame_step = len(t) // max_frames
+                t_anim = t[::frame_step]
+                sol_anim = sol[::frame_step]
+            else:
+                t_anim = t
+                sol_anim = sol
+            
+            x = sol_anim[:, 0]      # horizontal position
+            z = sol_anim[:, 1]      # vertical position
+            theta = sol_anim[:, 2]  # rotation angle
+            
+            # Create figure with single animation plot
+            fig = plt.figure(figsize=(8, 6), dpi=80)
+            
+            # Animation axis
+            ax_anim = fig.add_subplot(111)
+            ax_anim.set_xlim(-0.06, 0.06)
+            ax_anim.set_ylim(0, 0.12)
+            ax_anim.set_aspect('equal')
+            ax_anim.set_title('Maglev Animation')
+            ax_anim.grid(True)
+            
+            # Create animation elements
+            # Base rectangle
+            base = Rectangle((-0.06, 0), 0.12, 0.01, fc='#3a3a3a')
+            ax_anim.add_patch(base)
+            
+            # Electromagnets (circles)
+            magnets = []
+            for pos in [-0.03, -0.01, 0.01, 0.03]:
+                magnet = Circle((pos, 0.01), 0.005, fc='#e63946')
+                ax_anim.add_patch(magnet)
+                magnets.append(magnet)
+            
+            # Levitating object (ellipse)
+            levitating_object = Ellipse((x[0], z[0]), 0.024, 0.006, 
+                                       angle=np.degrees(theta[0]), fc='#1d71b8')
+            ax_anim.add_patch(levitating_object)
+            
+            # Animation functions
+            def init():
+                levitating_object.center = (x[0], z[0])
+                levitating_object.angle = np.degrees(theta[0])
+                return [levitating_object]
+            
+            def update(i):
+                # Update levitating object
+                levitating_object.center = (x[i], z[i])
+                levitating_object.angle = np.degrees(theta[i])
+                return [levitating_object]
+            
+            # Create animation with HTML5 backend (more compatible)
+            plt.rcParams['animation.html'] = 'html5'
+            
+            # Set interval to ~16.67ms for 60fps animation
+            ani = animation.FuncAnimation(fig, update, frames=len(t_anim),
+                                         init_func=init, blit=True, interval=16.67)
+            
+            plt.tight_layout()
+            plt.close()  # Close the figure to prevent display in the notebook
+            
+            # Convert animation to HTML with explicit HTML5 renderer
+            html_animation = ani.to_jshtml(default_mode='once')
+            
+            # Return HTML animation with additional styling for visibility
+            return IPythonHTML(f"""
+            <div style="width:100%; margin:0 auto; border:1px solid #ddd; border-radius:5px; padding:10px; background-color:#f9f9f9;">
+                {html_animation}
             </div>
-            <script>
-            const frames = {base64_frames};
-            let i = 0;
-            const img = document.getElementById("maglev-frame");
-            setInterval(() => {{
-                img.src = "data:image/png;base64," + frames[i];
-                i = (i + 1) % frames.length;
-            }}, 1000 / 30);  // 30 FPS
-            </script>
-            """
-            return IPythonHTML(js_script)
-
+            """)
+        
         except Exception as e:
-            return IPythonHTML(f"<p style='color:red;'>Failed to render animation: {e}</p>")
-
+            import traceback
+            error_details = traceback.format_exc()
+            return IPythonHTML(f"""
+            <div style="color:red; border:1px solid #ffaaaa; padding:10px; background-color:#ffeeee; border-radius:5px;">
+                <h3>Animation Error</h3>
+                <p>Failed to render animation: {str(e)}</p>
+                <details>
+                    <summary>Error Details</summary>
+                    <pre>{error_details}</pre>
+                </details>
+            </div>
+            """)
 
     def simulate_and_plot(Kp: float, Kd: float) -> None:
         """
@@ -306,6 +346,7 @@ def interactive_simulation(
             with animation_out:
                 try:
                     # Add a loading message while animation is being created
+                    animation_out.clear_output(wait=True)
                     display(HTML("<p>Creating animation, please wait...</p>"))
                     
                     # Create and display the animation
@@ -314,9 +355,14 @@ def interactive_simulation(
                     # Clear the loading message and show animation
                     animation_out.clear_output(wait=True)
                     display(animation_html)
+                    
+                    # Force rendering of animation (helps in some notebook environments)
+                    display(Javascript("void(0);"))
                 except Exception as e:
                     animation_out.clear_output(wait=True)
                     print(f"Error creating animation: {str(e)}")
+                    import traceback
+                    print(traceback.format_exc())
 
         except Exception as e:
             with out:
