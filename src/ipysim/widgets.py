@@ -20,7 +20,7 @@ import contextlib
 import io
 import sys
 import os
-import base64
+import traceback
 from ipywidgets import interact, FloatSlider, Button, Output, VBox, HTML, HBox
 from IPython.display import display, Javascript, HTML as IPythonHTML
 from ipysim.core import simulate_maglev
@@ -214,7 +214,6 @@ def interactive_simulation(
             # Create animation with HTML5 backend (more compatible)
             plt.rcParams['animation.html'] = 'html5'
             
-            # Set interval to ~16.67ms for 60fps animation
             ani = animation.FuncAnimation(fig, update, frames=len(t_anim),
                                          init_func=init, blit=True, interval=16.67)
             
@@ -232,7 +231,6 @@ def interactive_simulation(
             """)
         
         except Exception as e:
-            import traceback
             error_details = traceback.format_exc()
             return IPythonHTML(f"""
             <div style="color:red; border:1px solid #ffaaaa; padding:10px; background-color:#ffeeee; border-radius:5px;">
@@ -301,10 +299,6 @@ def interactive_simulation(
                 # Store successful values only if the simulation was valid
                 last_valid_Kp = Kp
                 last_valid_Kd = Kd
-
-            # Clear animation output first so it doesn't show before the plots
-            with animation_out:
-                animation_out.clear_output(wait=True)
                 
             with out:
                 out.clear_output(wait=True)
@@ -341,28 +335,6 @@ def interactive_simulation(
                     print(f"Error during plotting: {str(e)}")
                     print(f"The simulation may have produced extreme values that cannot be displayed.")
                     print(f"Try different parameters with higher Kp and Kd values.")
-            
-            # Now create and display animation after the plots
-            with animation_out:
-                try:
-                    # Add a loading message while animation is being created
-                    animation_out.clear_output(wait=True)
-                    display(HTML("<p>Creating animation, please wait...</p>"))
-                    
-                    # Create and display the animation
-                    animation_html = create_maglev_animation(t, sol)
-                    
-                    # Clear the loading message and show animation
-                    animation_out.clear_output(wait=True)
-                    display(animation_html)
-                    
-                    # Force rendering of animation (helps in some notebook environments)
-                    display(Javascript("void(0);"))
-                except Exception as e:
-                    animation_out.clear_output(wait=True)
-                    print(f"Error creating animation: {str(e)}")
-                    import traceback
-                    print(traceback.format_exc())
 
         except Exception as e:
             with out:
@@ -399,6 +371,44 @@ def interactive_simulation(
                         plt.tight_layout()
                         plt.show()
 
+    def on_run_animation_clicked(_):
+        """
+        Handle the Run Animation button click.
+        
+        Args:
+            _: Unused button click event parameter
+            
+        Returns:
+            None
+        """
+        global t, sol
+        if t is None or sol is None:
+            with animation_out:
+                animation_out.clear_output(wait=True)
+                print("No simulation data available. Adjust parameters first.")
+            return
+        
+        with animation_out:
+            try:
+                # Add a loading message while animation is being created
+                animation_out.clear_output(wait=True)
+                display(HTML("<p>Creating animation, please wait...</p>"))
+                
+                # Create and display the animation
+                animation_html = create_maglev_animation(t, sol)
+                
+                # Clear the loading message and show animation
+                animation_out.clear_output(wait=True)
+                display(animation_html)
+                
+                # Force rendering of animation (helps in some notebook environments)
+                display(Javascript("void(0);"))
+            except Exception as e:
+                animation_out.clear_output(wait=True)
+                print(f"Error creating animation: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
+
     def evaluate_parameters(_) -> None:
         """
         Evaluate if the current Kp and Kd match the target values.
@@ -430,6 +440,10 @@ def interactive_simulation(
     Kd_slider = FloatSlider(value=max(Kd_default, Kd_min), min=Kd_min, max=200, step=5.0, description='Kd')
     evaluate_button = Button(description="Evaluate")
     evaluate_button.on_click(evaluate_parameters)
+    
+    # Add a button to run the animation
+    run_animation_button = Button(description="Run Animation")
+    run_animation_button.on_click(on_run_animation_clicked)
 
     with redirect_stderr_to_console():
         interact(
@@ -438,7 +452,7 @@ def interactive_simulation(
             Kd=Kd_slider
         )
 
-    output_widgets = [out, animation_out]
+    output_widgets = [out, run_animation_button, animation_out]
     if evaluation_function is not None:
         # Adds widgets for evalution
         output_widgets += [evaluate_button, result_output]
