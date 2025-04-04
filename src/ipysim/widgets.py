@@ -13,13 +13,15 @@ Users can optionally pass in custom simulation parameters and initial state.
 from typing import Callable, Optional, Dict, List
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.patches import Circle, Rectangle, Ellipse
 import warnings
 import contextlib
 import io
 import sys
 import os
-from ipywidgets import interact, FloatSlider, Button, Output, VBox, HTML
-from IPython.display import display, Javascript
+from ipywidgets import interact, FloatSlider, Button, Output, VBox, HTML, HBox
+from IPython.display import display, Javascript, HTML as IPythonHTML
 from ipysim.core import simulate_maglev
 from ipysim.params import params as default_params, state0 as default_state0
 
@@ -114,6 +116,7 @@ def interactive_simulation(
     last_valid_Kd = max(Kd_default, Kd_min)
 
     out = Output()
+    animation_out = Output()
     result_output = Output()
 
     def validate_parameters(Kp: float, Kd: float) -> bool:
@@ -139,6 +142,150 @@ def interactive_simulation(
             return False
             
         return True
+
+    def create_maglev_animation(t, sol):
+        """
+        Create an animation of the floating magnet based on simulation data.
+        
+        Args:
+            t (np.ndarray): Time points from simulation
+            sol (np.ndarray): Solution array from simulation
+            
+        Returns:
+            IPythonHTML: HTML containing the animation with controls
+        """
+        try:
+            # Extract x, z positions and theta (rotation) from solution
+            x_positions = sol[:, 0]
+            z_positions = sol[:, 1]
+            theta_positions = sol[:, 2]  # theta is the angle in radians
+            
+            # Calculate simulation real-time duration
+            sim_duration = t[-1] - t[0]  # seconds
+            
+            # Target approximately 100 frames for a balance of smoothness and performance
+            # For a 1-second simulation, we'll get 100 frames (10ms per frame)
+            target_frames = min(200, len(t))  # Cap at 200 frames max
+            frame_skip = max(1, len(t) // target_frames)
+            
+            t_sub = t[::frame_skip]
+            x_sub = x_positions[::frame_skip]
+            z_sub = z_positions[::frame_skip]
+            theta_sub = theta_positions[::frame_skip]
+            
+            # Calculate the interval in milliseconds between frames to match real-time speed
+            # Lower interval = faster playback
+            real_time_interval = (sim_duration * 1000) / len(t_sub)
+            
+            # Scale the interval to adjust playback speed
+            # 1.0 = real-time, 0.5 = 2x speed, 2.0 = half speed
+            speed_factor = 1.0  # Real-time playback
+            
+            # Calculate final interval with speed adjustment
+            adjusted_interval = real_time_interval * speed_factor
+            
+            # Ensure interval is within reasonable bounds for smooth playback
+            final_interval = max(20, min(int(adjusted_interval), 66))  # 15-50 fps range
+            
+            # Create figure and axis with a sleek, modern appearance
+            fig, ax = plt.subplots(figsize=(8, 5), facecolor='#f8f9fa')
+            ax.set_xlim(-0.05, 0.05)
+            ax.set_ylim(0, 0.1)
+            ax.set_aspect('equal')
+            ax.set_xlabel('X Position (m)', fontsize=10)
+            ax.set_ylabel('Z Position (m)', fontsize=10)
+            ax.set_title('Maglev Simulation', fontsize=12, fontweight='bold')
+            ax.grid(True, alpha=0.3, linestyle='--')
+            
+            # Create base platform with permanent magnets
+            base = Rectangle((-0.06, 0), 0.12, 0.01, fc='#3a3a3a', ec='#2a2a2a', zorder=1)
+            ax.add_patch(base)
+            
+            # Add base magnets
+            for pos in [-0.03, -0.01, 0.01, 0.03]:
+                base_magnet = Circle((pos, 0.01), 0.005, fc='#e63946', ec='#2a2a2a', zorder=2)
+                ax.add_patch(base_magnet)
+            
+            # Create shadow for the floating disc (enhances 3D effect)
+            shadow = Ellipse((x_sub[0], 0.0105), width=0.024, height=0.006, 
+                           fc=(0, 0, 0, 0.3), ec=None, zorder=1.5)
+            ax.add_patch(shadow)
+            
+            # Disc dimensions - thinner to look like a disc rather than a sphere
+            disc_width = 0.024  # Horizontal diameter
+            disc_height = 0.006  # Vertical thickness (thinner to look like a disc)
+            
+            # Create the main floating disc magnet with improved visual appearance
+            # Use an Ellipse with width > height to create a disc shape
+            floating_magnet = Ellipse((x_sub[0], z_sub[0]), width=disc_width, height=disc_height,
+                                     angle=np.degrees(theta_sub[0]), # Convert radians to degrees
+                                     fc='#1d71b8', ec='#0b3e69', zorder=3,
+                                     linewidth=1.5)
+            ax.add_patch(floating_magnet)
+            
+            # Time text for tracking simulation time
+            time_text = ax.text(0.02, 0.95, f'Time: {0:.2f}s', 
+                              transform=ax.transAxes, fontsize=10,
+                              bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+            
+            def animate(i):
+                """Animation function for updating magnet position and tilt"""
+                # Get current values
+                x = x_sub[i]
+                z = z_sub[i]
+                theta = theta_sub[i]
+                angle_deg = np.degrees(theta)
+                
+                # Update disc position and rotation
+                floating_magnet.center = (x, z)
+                floating_magnet.angle = angle_deg
+                
+                # Calculate shadow dimensions - shadow gets narrower with increased tilt
+                shadow_width_factor = np.cos(abs(theta)) * 0.9 + 0.1  # Minimum 0.1, max 1.0
+                shadow.width = disc_width * shadow_width_factor
+                shadow.center = (x, 0.0105)
+                
+                # Adjust shadow opacity based on height
+                shadow_alpha = max(0.05, 0.3 - (z * 3))
+                shadow.set_alpha(shadow_alpha)
+                
+                # Update time text
+                time_text.set_text(f'Time: {t_sub[i]:.2f}s')
+                
+                return [floating_magnet, shadow, time_text]
+            
+            # Create animation with adjusted speed
+            anim = animation.FuncAnimation(
+                fig, animate, frames=len(t_sub),
+                interval=final_interval,
+                blit=True
+            )
+            
+            # Close the figure to prevent it from showing separately
+            plt.close(fig)
+            
+            # Use 'html5' output format WITHOUT the unsupported fps parameter
+            animation_html = anim.to_html5_video()
+            
+            # Create styled HTML with the video element
+            styled_html = f"""
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <h3 style="font-family: Arial, sans-serif; color: #1d3557; margin-top: 0; margin-bottom: 10px;">Magnetic Levitation Animation</h3>
+                {animation_html}
+            </div>
+            """
+            
+            return IPythonHTML(styled_html)
+            
+        except Exception as e:
+            # Return error message as HTML so we can see what went wrong
+            error_html = f"""
+            <div style="background: #ffebee; border-radius: 4px; padding: 10px; border: 1px solid #f44336;">
+                <p><strong>Animation Error:</strong> {str(e)}</p>
+                <p>Please try adjusting your controller parameters or refreshing the notebook.</p>
+            </div>
+            """
+            return IPythonHTML(error_html)
 
     def simulate_and_plot(Kp: float, Kd: float) -> None:
         """
@@ -197,6 +344,10 @@ def interactive_simulation(
                 last_valid_Kp = Kp
                 last_valid_Kd = Kd
 
+            # Clear animation output first so it doesn't show before the plots
+            with animation_out:
+                animation_out.clear_output(wait=True)
+                
             with out:
                 out.clear_output(wait=True)
                 
@@ -232,6 +383,22 @@ def interactive_simulation(
                     print(f"Error during plotting: {str(e)}")
                     print(f"The simulation may have produced extreme values that cannot be displayed.")
                     print(f"Try different parameters with higher Kp and Kd values.")
+            
+            # Now create and display animation after the plots
+            with animation_out:
+                try:
+                    # Add a loading message while animation is being created
+                    display(HTML("<p>Creating animation, please wait...</p>"))
+                    
+                    # Create and display the animation
+                    animation_html = create_maglev_animation(t, sol)
+                    
+                    # Clear the loading message and show animation
+                    animation_out.clear_output(wait=True)
+                    display(animation_html)
+                except Exception as e:
+                    animation_out.clear_output(wait=True)
+                    print(f"Error creating animation: {str(e)}")
 
         except Exception as e:
             with out:
@@ -307,7 +474,7 @@ def interactive_simulation(
             Kd=Kd_slider
         )
 
-    output_widgets = [out]
+    output_widgets = [out, animation_out]
     if evaluation_function is not None:
         # Adds widgets for evalution
         output_widgets += [evaluate_button, result_output]
