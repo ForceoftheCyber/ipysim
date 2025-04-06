@@ -225,8 +225,17 @@ def interactive_simulation(
             
             # Return HTML animation with additional styling for visibility
             return IPythonHTML(f"""
-            <div style="width:100%; margin:0 auto; border:1px solid #ddd; border-radius:5px; padding:10px; background-color:#f9f9f9;">
-                {html_animation}
+            <div style="width:100%; max-width:800px; margin:0 auto; border:1px solid #ddd; border-radius:5px; padding:10px; background-color:#f9f9f9;">
+                <style>
+                    .anim-controls button,
+                    .anim-controls input[type="range"] {{
+                        transform: scale(0.6);  /* shrink buttons and slider */
+                        transform-origin: top left;
+                    }}
+                </style>
+                <div class="anim-controls">
+                    {html_animation}
+                </div>
             </div>
             """)
         
