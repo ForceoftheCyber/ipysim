@@ -199,23 +199,31 @@ def interactive_simulation(
                                        angle=np.degrees(theta[0]), fc='#1d71b8')
             ax_anim.add_patch(levitating_object)
             
+            # Add a text element for the timer
+            timer_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes, fontsize=12, color='black')
+
             # Animation functions
             def init():
                 levitating_object.center = (x[0], z[0])
                 levitating_object.angle = np.degrees(theta[0])
-                return [levitating_object]
+                timer_text.set_text('Time: 0.00 s')
+                return [levitating_object, timer_text]
             
             def update(i):
                 # Update levitating object
                 levitating_object.center = (x[i], z[i])
                 levitating_object.angle = np.degrees(theta[i])
-                return [levitating_object]
+                timer_text.set_text(f'Time: {t_anim[i]:.2f} s')
+                return [levitating_object, timer_text]
             
             # Create animation with HTML5 backend (more compatible)
             plt.rcParams['animation.html'] = 'html5'
             
-            ani = animation.FuncAnimation(fig, update, frames=len(t_anim),
-                                         init_func=init, blit=True, interval=16.67)
+            ani = animation.FuncAnimation(
+                fig, update, frames=len(t_anim),
+                # Framerate based on 1000 frames generated
+                init_func=init, blit=True, interval=dt * 1000  # Set interval to real-time
+            )
             
             plt.tight_layout()
             plt.close()  # Close the figure to prevent display in the notebook
