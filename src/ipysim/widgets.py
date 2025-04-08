@@ -92,6 +92,11 @@ def interactive_simulation(
     """
     Create an interactive simulation for the maglev system using Jupyter widgets.
 
+    This function allows users to:
+    - Adjust the proportional (`Kp`) and derivative (`Kd`) gains using sliders, and add more
+      sliders corresponding to other parameters in the system.
+    - Visualize the system's behavior over time.
+    - Evaluate if student-selected parameters are correct in accordance with an evaluation function.
     Args:
         params (Optional[Dict[str, float]]): Simulation parameters (e.g., mass, magnetic properties).
         state0 (Optional[List[float]]): Initial state of the system [x, z, theta, dx, dz, dtheta].
