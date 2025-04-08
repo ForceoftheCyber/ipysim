@@ -81,34 +81,32 @@ def interactive_simulation(
     params: Optional[Dict[str, float]] = None,
     state0: Optional[List[float]] = None,
     T: float = 1.0,
-    dt: float = 0.001,
+    dt: float = 0.01,
     Kp_default: float = 600.0,
     Kd_default: float = 30.0,
     Kp_min: float = 20.0,  
-    Kd_min: float = 10.0,  
+    Kd_min: float = 10.0,
     evaluation_function: Callable[[np.ndarray, np.ndarray], bool] | None = None,
+    sliders_config: Optional[Dict[str, Dict[str, any]]] = None,
 ) -> None:
     """
     Create an interactive simulation for the maglev system using Jupyter widgets.
 
-    This function allows users to:
-    - Adjust the proportional (`Kp`) and derivative (`Kd`) gains using sliders.
-    - Visualize the system's behavior over time.
-    - Evaluate if the student-selected `Kp` and `Kd` match the target values.
-
     Args:
-        params (Optional[Dict[str, float]]): Simulation parameters (e.g., mass, magnetic properties).
-        state0 (Optional[List[float]]): Initial state of the system [x, z, theta, dx, dz, dtheta].
-        T (float): Total simulation time in seconds.
-        dt (float): Time step for the simulation.
-        Kp_default (float): Default proportional gain for the PD controller.
-        Kd_default (float): Default derivative gain for the PD controller.
-
-    Returns:
-        None
+        # ... existing parameters ...
+        sliders_config: Dictionary defining custom sliders. Format:
+            {
+                "param_name": {
+                    "default": default_value,
+                    "min": min_value,
+                    "max": max_value,
+                    "step": step_size,
+                    "description": "Label text"
+                }
+            }
+            If None, defaults to Kp and Kd sliders only.
     """
-
-    global t, sol, Kp, Kd, last_valid_Kp, last_valid_Kd
+    global t, sol, last_valid_Kp, last_valid_Kd
     params = params or default_params
     state0 = state0 or default_state0
     
@@ -116,6 +114,26 @@ def interactive_simulation(
     last_valid_Kp = max(Kp_default, Kp_min)
     last_valid_Kd = max(Kd_default, Kd_min)
 
+    # Define default sliders if no config provided
+    if sliders_config is None:
+        sliders_config = {
+            "Kp": {
+                "default": max(Kp_default, Kp_min),
+                "min": Kp_min,
+                "max": 1000,
+                "step": 10.0,
+                "description": "Kp"
+            },
+            "Kd": {
+                "default": max(Kd_default, Kd_min),
+                "min": Kd_min,
+                "max": 200,
+                "step": 5.0,
+                "description": "Kd"
+            }
+        }
+
+    # Create outputs for visualization
     out = Output()
     animation_out = Output()
     result_output = Output()
@@ -260,25 +278,25 @@ def interactive_simulation(
             </div>
             """)
 
-    def simulate_and_plot(Kp: float, Kd: float) -> None:
+    def simulate_and_plot(**kwargs) -> None:
         """
         Simulate the maglev system and plot the results.
 
         Args:
-            Kp (float): Proportional gain for the PD controller.
-            Kd (float): Derivative gain for the PD controller.
-
-        Returns:
-            None
+            **kwargs: Variable keyword arguments from the sliders
         """
         global t, sol, last_valid_Kp, last_valid_Kd
+        
+        # Extract Kp and Kd for stability checking
+        Kp = kwargs.get("Kp", last_valid_Kp)
+        Kd = kwargs.get("Kd", last_valid_Kd)
         
         # Validate parameters before simulation
         if not validate_parameters(Kp, Kd):
             # Use the last valid values instead
             with redirect_stderr_to_console():
-                Kp_slider.value = last_valid_Kp
-                Kd_slider.value = last_valid_Kd
+                sliders["Kp"].value = last_valid_Kp
+                sliders["Kd"].value = last_valid_Kd
             return
         
         try:
@@ -286,8 +304,25 @@ def interactive_simulation(
             attempted_Kp = Kp
             attempted_Kd = Kd
             
+            # Handle initial state modifications if present in kwargs
+            current_state0 = state0.copy()
+            
+            # Update initial state if x0, z0, etc. are in kwargs
+            if "x0" in kwargs and kwargs["x0"] is not None:
+                current_state0[0] = kwargs["x0"]
+            if "z0" in kwargs and kwargs["z0"] is not None:
+                current_state0[1] = kwargs["z0"]
+            if "theta0" in kwargs and kwargs["theta0"] is not None:
+                current_state0[2] = kwargs["theta0"]
+            
+            # Update any other simulation parameters if present
+            current_params = params.copy()
+            for param_name, value in kwargs.items():
+                if param_name in current_params and param_name not in ["Kp", "Kd"]:
+                    current_params[param_name] = value
+            
             with redirect_stderr_to_console():
-                t, sol = simulate_maglev(Kp, Kd, T, dt, state0, params)
+                t, sol = simulate_maglev(Kp, Kd, T, dt, current_state0, current_params)
             
             # Validate the solution
             if not is_valid_solution(sol):
@@ -298,8 +333,8 @@ def interactive_simulation(
                 
                 # Roll back to last valid values
                 with redirect_stderr_to_console():
-                    Kp_slider.value = last_valid_Kp
-                    Kd_slider.value = last_valid_Kd
+                    sliders["Kp"].value = last_valid_Kp
+                    sliders["Kd"].value = last_valid_Kd
                 
                 # Re-run simulation with last valid parameters
                 with redirect_stderr_to_console():
@@ -358,8 +393,8 @@ def interactive_simulation(
                 out.clear_output(wait=True)
                 # Roll back to last valid values
                 with redirect_stderr_to_console():
-                    Kp_slider.value = last_valid_Kp
-                    Kd_slider.value = last_valid_Kd
+                    sliders["Kp"].value = last_valid_Kp
+                    sliders["Kd"].value = last_valid_Kd
                 
                 # Display error message with rollback information
                 print(f"Error: {e}")
@@ -453,20 +488,28 @@ def interactive_simulation(
                 else:
                     print("Incorrect!")
 
-    Kp_slider = FloatSlider(value=max(Kp_default, Kp_min), min=Kp_min, max=1000, step=10.0, description='Kp')
-    Kd_slider = FloatSlider(value=max(Kd_default, Kd_min), min=Kd_min, max=200, step=5.0, description='Kd')
+    # Create sliders dynamically from config
+    sliders = {}
+    for param_name, config in sliders_config.items():
+        sliders[param_name] = FloatSlider(
+            value=config.get("default", 0),
+            min=config.get("min", 0),
+            max=config.get("max", 100),
+            step=config.get("step", 1.0),
+            description=config.get("description", param_name)
+        )
+    
+    # Add buttons
     evaluate_button = Button(description="Evaluate")
     evaluate_button.on_click(evaluate_parameters)
-    
-    # Add a button to run the animation
     run_animation_button = Button(description="Run Animation")
     run_animation_button.on_click(on_run_animation_clicked)
 
+    # Create the interactive widget with dynamic sliders
     with redirect_stderr_to_console():
         interact(
             simulate_and_plot,
-            Kp=Kp_slider,
-            Kd=Kd_slider
+            **sliders
         )
 
     output_widgets = [out, run_animation_button, animation_out]
