@@ -93,7 +93,12 @@ def interactive_simulation(
     Create an interactive simulation for the maglev system using Jupyter widgets.
 
     Args:
-        # ... existing parameters ...
+        params (Optional[Dict[str, float]]): Simulation parameters (e.g., mass, magnetic properties).
+        state0 (Optional[List[float]]): Initial state of the system [x, z, theta, dx, dz, dtheta].
+        T (float): Total simulation time in seconds.
+        dt (float): Time step for the simulation.
+        Kp_default (float): Default proportional gain for the PD controller.
+        Kd_default (float): Default derivative gain for the PD controller.
         sliders_config: Dictionary defining custom sliders. Format:
             {
                 "param_name": {
