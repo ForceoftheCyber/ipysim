@@ -176,17 +176,24 @@ def interactive_simulation(
     def create_maglev_animation(t, sol):
         """
         Create an interactive animation of the maglev system using matplotlib's FuncAnimation.
-        
+
+        The animation describes a maglev system with visual elements:
+          - A base platform (gray rectangle)
+          - Two magnets (red squares) on the base
+          - A disc-like cylinder (maglev body) represented by a rotated rectangle 
+            with top and bottom ellipses to simulate rounded edges.
+
         Args:
-            t: Time array
-            sol: Solution array containing state variables
-            
+            t (array-like): Time array for the simulation.
+            sol (ndarray): 2D array containing state variables 
+                           with columns [x (horizontal), z (vertical), theta (angle), ...].
+
         Returns:
-            IPythonHTML: Interactive HTML animation
+            IPythonHTML: An HTML object containing the interactive animation.
         """
         try:
-            # Use full simulation data without downsampling for highest granularity
-            max_frames = 1000  # Maximum number of frames to prevent browser slowdown
+            # Downsample simulation data if the number of frames exceeds max_frames.
+            max_frames = 1000  # Prevent browser overload.
             if len(t) > max_frames:
                 frame_step = len(t) // max_frames
                 t_anim = t[::frame_step]
@@ -194,26 +201,29 @@ def interactive_simulation(
             else:
                 t_anim = t
                 sol_anim = sol
-            
-            x = sol_anim[:, 0]      # horizontal position
-            z = sol_anim[:, 1]      # vertical position
-            theta = sol_anim[:, 2]  # rotation angle
-            
-            # Create figure with single animation plot
+
+            # Extract state variables: horizontal position, vertical position, and rotation angle.
+            x = sol_anim[:, 0]
+            z = sol_anim[:, 1]
+            theta = sol_anim[:, 2]
+
+            # Create the figure for the animation with specified size and resolution.
             fig = plt.figure(figsize=(8, 6), dpi=80)
-            
-            # Animation axis
+
+            # Define a vertical offset to ensure the disk floats higher.
+            float_offset = 0.010  # Adjust this value as needed
+
+            # Configure animation axis properties.
             ax_anim = fig.add_subplot(111)
             ax_anim.set_xlim(-0.06, 0.06)
-            # Dynamically set y-axis limit: 10% margin above the initial z value.
-            initial_z = state0[1]   # Using the simulation's initial z-position.
+            initial_z = state0[1]  # Use initial z-position for setting y-axis limit.
             margin_pct = 0.4
-            ax_anim.set_ylim(0, initial_z * (1 + margin_pct))
+            ax_anim.set_ylim(0, (initial_z + float_offset) * (1 + margin_pct))
             ax_anim.set_aspect('equal')
             ax_anim.set_title('Maglev Animation')
             ax_anim.grid(True)
-            
-            # Create animation elements
+
+            # Draw the static base and magnets for context.
             base = Rectangle((-0.06, 0), 0.12, 0.01, fc='#3a3a3a')
             ax_anim.add_patch(base)
             magnets = []
@@ -222,38 +232,49 @@ def interactive_simulation(
                 ax_anim.add_patch(magnet)
                 magnets.append(magnet)
             
-            # Set dimensions for a disc-like cylinder body ~30% of the plot width
-            w_body = 0.024    
-            h_body = 0.008    
-            
-            # Create the cylinder body as a rectangle to be rotated
-            cylinder_body = Rectangle((x[0]-w_body/2, z[0]-h_body/2), w_body, h_body, fc='#8B4513', ec='black')
+            # Set dimensions for a disc-like cylinder body that occupies about 30% of the plot width.
+            w_body = 0.024    # Width of the cylinder body.
+            h_body = 0.008    # Height of the cylinder body.
+
+            # Create the cylinder body as a rectangle; note the vertical offset added.
+            cylinder_body = Rectangle((x[0] - w_body/2, (z[0] + float_offset) - h_body/2),
+                                      w_body, h_body, fc='#8B4513', ec='black')
             ax_anim.add_patch(cylinder_body)
-            
-            # Top ellipse to simulate the cylinder's top edge
+
+            # Top ellipse: simulates the rounded top edge of the cylinder.
             top_width = w_body
-            top_height = 0.007  # scaled up from 0.002
+            top_height = 0.007  # Adjust for visual effect.
             offset_x_top = - (h_body/2) * np.sin(np.radians(theta[0]))
             offset_y_top = (h_body/2) * np.cos(np.radians(theta[0]))
-            cylinder_top = Ellipse((x[0] + offset_x_top, z[0] + offset_y_top), top_width, top_height, fc='#A0522D', ec='black')
+            cylinder_top = Ellipse((x[0] + offset_x_top, (z[0] + float_offset) + offset_y_top),
+                                   top_width, top_height, fc='#A0522D', ec='black')
             ax_anim.add_patch(cylinder_top)
-            
-            # Bottom ellipse to simulate the cylinder's bottom edge
+
+            # Bottom ellipse: simulates the rounded bottom edge of the cylinder.
             bottom_width = w_body
-            bottom_height = 0.007  # scaled up from 0.002
+            bottom_height = 0.007  # Adjust proportionally.
             offset_x_bottom = (h_body/2) * np.sin(np.radians(theta[0]))
             offset_y_bottom = - (h_body/2) * np.cos(np.radians(theta[0]))
-            cylinder_bottom = Ellipse((x[0] + offset_x_bottom, z[0] + offset_y_bottom), bottom_width, bottom_height, fc='#A0522D', ec='black')
+            cylinder_bottom = Ellipse((x[0] + offset_x_bottom, (z[0] + float_offset) + offset_y_bottom),
+                                      bottom_width, bottom_height, fc='#A0522D', ec='black')
             ax_anim.add_patch(cylinder_bottom)
-            
-            timer_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes, fontsize=12, color='black')
-            
+
+            # Timer text in the top-left corner.
+            timer_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes,
+                                      fontsize=12, color='black')
+
             def init():
-                current_x, current_z = x[0], z[0]
+                """
+                Initialize the animation by setting the starting positions and orientations.
+                Resets the cylinder and its rounded edges to their initial state.
+                """
+                current_x, current_z = x[0], z[0] + float_offset
                 current_theta = theta[0]
+                # Create rotation transformation based on the initial theta.
                 trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
                 cylinder_body.set_xy((current_x - w_body/2, current_z - h_body/2))
                 cylinder_body.set_transform(trans)
+                # Recalculate offsets for the rounded edges.
                 offset_x_top = - (h_body/2) * np.sin(current_theta)
                 offset_y_top = (h_body/2) * np.cos(current_theta)
                 cylinder_top.center = (current_x + offset_x_top, current_z + offset_y_top)
@@ -264,9 +285,18 @@ def interactive_simulation(
                 cylinder_bottom.angle = np.degrees(current_theta)
                 timer_text.set_text('Time: 0.00 s')
                 return [cylinder_body, cylinder_top, cylinder_bottom, timer_text]
-            
+
             def update(i):
-                current_x, current_z = x[i], z[i]
+                """
+                Update positions and rotations for frame i.
+
+                For each frame:
+                  - Update x, z, and theta values; add float_offset to keep the disk elevated.
+                  - Adjust the transformation of the cylinder body for its rotation.
+                  - Recalculate offsets for the top and bottom ellipses based on the new theta.
+                  - Update the timer text.
+                """
+                current_x, current_z = x[i], z[i] + float_offset
                 current_theta = theta[i]
                 trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
                 cylinder_body.set_xy((current_x - w_body/2, current_z - h_body/2))
@@ -281,19 +311,18 @@ def interactive_simulation(
                 cylinder_bottom.angle = np.degrees(current_theta)
                 timer_text.set_text(f'Time: {t_anim[i]:.2f} s')
                 return [cylinder_body, cylinder_top, cylinder_bottom, timer_text]
-            
+
             plt.rcParams['animation.html'] = 'html5'
-            ani = animation.FuncAnimation(
-                fig, update, frames=len(t_anim),
-                init_func=init, blit=True, interval=dt * 1000
-            )
-            
+            ani = animation.FuncAnimation(fig, update, frames=len(t_anim),
+                                          init_func=init, blit=True, interval=dt * 1000)
+
             plt.tight_layout()
-            plt.close()  # Prevent figure from duplicating in the notebook
-            
+            plt.close()  # Prevent duplicate figures in the notebook
+
             html_animation = ani.to_jshtml(default_mode='once')
             return IPythonHTML(f"""
-            <div style="width:100%; max-width:800px; margin:0 auto; border:1px solid #ddd; border-radius:5px; padding:10px; background-color:#f9f9f9;">
+            <div style="width:100%; max-width:800px; margin:0 auto; border:1px solid #ddd; 
+                        border-radius:5px; padding:10px; background-color:#f9f9f9;">
                 <style>
                     .anim-controls button,
                     .anim-controls input[type="range"] {{
@@ -306,7 +335,6 @@ def interactive_simulation(
                 </div>
             </div>
             """)
-        
         except Exception as e:
             error_details = traceback.format_exc()
             return IPythonHTML(f"""
