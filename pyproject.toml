@@ -1,6 +1,6 @@
 [project]
 name = "ipysim"
-version = "0.0.31"
+version = "0.0.33"
 description = "Simulation library"
 dependencies = [
     "ipython",
