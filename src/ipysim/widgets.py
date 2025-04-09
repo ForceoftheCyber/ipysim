@@ -15,6 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Circle, Rectangle, Ellipse
+from matplotlib import transforms
 import warnings
 import contextlib
 import io
@@ -185,7 +186,6 @@ def interactive_simulation(
         """
         try:
             # Use full simulation data without downsampling for highest granularity
-            # Only downsample if the dataset is extremely large to prevent browser issues
             max_frames = 1000  # Maximum number of frames to prevent browser slowdown
             if len(t) > max_frames:
                 frame_step = len(t) // max_frames
@@ -205,67 +205,99 @@ def interactive_simulation(
             # Animation axis
             ax_anim = fig.add_subplot(111)
             ax_anim.set_xlim(-0.06, 0.06)
-            ax_anim.set_ylim(0, 0.12)
+            # Dynamically set y-axis limit: 10% margin above the initial z value.
+            initial_z = state0[1]   # Using the simulation's initial z-position.
+            margin_pct = 0.4
+            ax_anim.set_ylim(0, initial_z * (1 + margin_pct))
             ax_anim.set_aspect('equal')
             ax_anim.set_title('Maglev Animation')
             ax_anim.grid(True)
             
             # Create animation elements
-            # Base rectangle
             base = Rectangle((-0.06, 0), 0.12, 0.01, fc='#3a3a3a')
             ax_anim.add_patch(base)
-            
-            # Electromagnets (circles)
             magnets = []
-            for pos in [-0.03, -0.01, 0.01, 0.03]:
-                magnet = Circle((pos, 0.01), 0.005, fc='#e63946')
+            for pos in [-0.01, 0.01]:
+                magnet = Rectangle((pos - 0.005, 0.01 - 0.005), 0.01, 0.01, fc='#e63946')
                 ax_anim.add_patch(magnet)
                 magnets.append(magnet)
             
-            # Levitating object (ellipse)
-            levitating_object = Ellipse((x[0], z[0]), 0.024, 0.006, 
-                                       angle=np.degrees(theta[0]), fc='#1d71b8')
-            ax_anim.add_patch(levitating_object)
+            # Set dimensions for a disc-like cylinder body ~30% of the plot width
+            w_body = 0.024    
+            h_body = 0.008    
             
-            # Add a text element for the timer
+            # Create the cylinder body as a rectangle to be rotated
+            cylinder_body = Rectangle((x[0]-w_body/2, z[0]-h_body/2), w_body, h_body, fc='#8B4513', ec='black')
+            ax_anim.add_patch(cylinder_body)
+            
+            # Top ellipse to simulate the cylinder's top edge
+            top_width = w_body
+            top_height = 0.007  # scaled up from 0.002
+            offset_x_top = - (h_body/2) * np.sin(np.radians(theta[0]))
+            offset_y_top = (h_body/2) * np.cos(np.radians(theta[0]))
+            cylinder_top = Ellipse((x[0] + offset_x_top, z[0] + offset_y_top), top_width, top_height, fc='#A0522D', ec='black')
+            ax_anim.add_patch(cylinder_top)
+            
+            # Bottom ellipse to simulate the cylinder's bottom edge
+            bottom_width = w_body
+            bottom_height = 0.007  # scaled up from 0.002
+            offset_x_bottom = (h_body/2) * np.sin(np.radians(theta[0]))
+            offset_y_bottom = - (h_body/2) * np.cos(np.radians(theta[0]))
+            cylinder_bottom = Ellipse((x[0] + offset_x_bottom, z[0] + offset_y_bottom), bottom_width, bottom_height, fc='#A0522D', ec='black')
+            ax_anim.add_patch(cylinder_bottom)
+            
             timer_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes, fontsize=12, color='black')
-
-            # Animation functions
+            
             def init():
-                levitating_object.center = (x[0], z[0])
-                levitating_object.angle = np.degrees(theta[0])
+                current_x, current_z = x[0], z[0]
+                current_theta = theta[0]
+                trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
+                cylinder_body.set_xy((current_x - w_body/2, current_z - h_body/2))
+                cylinder_body.set_transform(trans)
+                offset_x_top = - (h_body/2) * np.sin(current_theta)
+                offset_y_top = (h_body/2) * np.cos(current_theta)
+                cylinder_top.center = (current_x + offset_x_top, current_z + offset_y_top)
+                cylinder_top.angle = np.degrees(current_theta)
+                offset_x_bottom = (h_body/2) * np.sin(current_theta)
+                offset_y_bottom = - (h_body/2) * np.cos(current_theta)
+                cylinder_bottom.center = (current_x + offset_x_bottom, current_z + offset_y_bottom)
+                cylinder_bottom.angle = np.degrees(current_theta)
                 timer_text.set_text('Time: 0.00 s')
-                return [levitating_object, timer_text]
+                return [cylinder_body, cylinder_top, cylinder_bottom, timer_text]
             
             def update(i):
-                # Update levitating object
-                levitating_object.center = (x[i], z[i])
-                levitating_object.angle = np.degrees(theta[i])
+                current_x, current_z = x[i], z[i]
+                current_theta = theta[i]
+                trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
+                cylinder_body.set_xy((current_x - w_body/2, current_z - h_body/2))
+                cylinder_body.set_transform(trans)
+                offset_x_top = - (h_body/2) * np.sin(current_theta)
+                offset_y_top = (h_body/2) * np.cos(current_theta)
+                cylinder_top.center = (current_x + offset_x_top, current_z + offset_y_top)
+                cylinder_top.angle = np.degrees(current_theta)
+                offset_x_bottom = (h_body/2) * np.sin(current_theta)
+                offset_y_bottom = - (h_body/2) * np.cos(current_theta)
+                cylinder_bottom.center = (current_x + offset_x_bottom, current_z + offset_y_bottom)
+                cylinder_bottom.angle = np.degrees(current_theta)
                 timer_text.set_text(f'Time: {t_anim[i]:.2f} s')
-                return [levitating_object, timer_text]
+                return [cylinder_body, cylinder_top, cylinder_bottom, timer_text]
             
-            # Create animation with HTML5 backend (more compatible)
             plt.rcParams['animation.html'] = 'html5'
-            
             ani = animation.FuncAnimation(
                 fig, update, frames=len(t_anim),
-                # Framerate based on 1000 frames generated
-                init_func=init, blit=True, interval=dt * 1000  # Set interval to real-time
+                init_func=init, blit=True, interval=dt * 1000
             )
             
             plt.tight_layout()
-            plt.close()  # Close the figure to prevent display in the notebook
+            plt.close()  # Prevent figure from duplicating in the notebook
             
-            # Convert animation to HTML with explicit HTML5 renderer
             html_animation = ani.to_jshtml(default_mode='once')
-            
-            # Return HTML animation with additional styling for visibility
             return IPythonHTML(f"""
             <div style="width:100%; max-width:800px; margin:0 auto; border:1px solid #ddd; border-radius:5px; padding:10px; background-color:#f9f9f9;">
                 <style>
                     .anim-controls button,
                     .anim-controls input[type="range"] {{
-                        transform: scale(0.6);  /* shrink buttons and slider */
+                        transform: scale(0.6);
                         transform-origin: top left;
                     }}
                 </style>
