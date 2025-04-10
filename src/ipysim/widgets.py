@@ -179,7 +179,7 @@ def interactive_simulation(
 
         The animation describes a maglev system with visual elements:
           - A base platform (gray rectangle)
-          - Two magnets (red squares) on the base
+          - Two copper-colored solenoids on the base
           - A disc-like cylinder (maglev body) represented by a rotated rectangle 
             with top and bottom ellipses to simulate rounded edges.
 
@@ -210,53 +210,125 @@ def interactive_simulation(
             # Create the figure for the animation with specified size and resolution.
             fig = plt.figure(figsize=(8, 6), dpi=80)
 
-            # Define a vertical offset to ensure the disk floats higher.
-            float_offset = 0.010  # Adjust this value as needed
-
+            # Define base_height and solenoid parameters
+            base_height = 0.01
+            solenoid_height = 0.012
+            
+            # Calculate y-coordinate offset to make the top of solenoids the zero point
+            # The top of solenoids is at base_height + 0.001 + solenoid_height
+            y_offset = base_height + 0.001 + solenoid_height
+            
             # Configure animation axis properties.
             ax_anim = fig.add_subplot(111)
             ax_anim.set_xlim(-0.06, 0.06)
-            initial_z = state0[1]  # Use initial z-position for setting y-axis limit.
+            
+            # Use the initial z-position for setting y-axis limit.
+            # Now z=0 is at the top of the solenoids, all positions should be relative to this
+            initial_z = state0[1]  # Original z value from state
             margin_pct = 0.4
-            ax_anim.set_ylim(0, (initial_z + float_offset) * (1 + margin_pct))
+            
+            # Set y-axis with top of solenoid at 0
+            # Lower bound includes base and solenoids (negative values)
+            # Upper bound is scaled based on initial_z
+            ax_anim.set_ylim(-y_offset, initial_z * (1 + margin_pct))
             ax_anim.set_aspect('equal')
             ax_anim.set_title('Maglev Animation')
-            ax_anim.grid(True)
+            ax_anim.grid(False)  # Remove the grid as requested
 
-            # Draw the static base and magnets for context.
-            base = Rectangle((-0.06, 0), 0.12, 0.01, fc='#3a3a3a')
+            # Draw the static base - shifted down by y_offset
+            base = Rectangle((-0.06, -y_offset), 0.12, base_height, fc='#3a3a3a')
             ax_anim.add_patch(base)
-            magnets = []
-            for pos in [-0.01, 0.01]:
-                magnet = Rectangle((pos - 0.005, 0.01 - 0.005), 0.01, 0.01, fc='#e63946')
-                ax_anim.add_patch(magnet)
-                magnets.append(magnet)
             
-            # Set dimensions for a disc-like cylinder body that occupies about 30% of the plot width.
-            w_body = 0.024    # Width of the cylinder body.
-            h_body = 0.008    # Height of the cylinder body.
+            # Create smaller, more realistic solenoids - also shifted by offset
+            solenoid_positions = [-0.01, 0.01]
+            solenoid_width = 0.009
+            copper_color = '#b87333'
+            dark_copper = '#8c5e28'
+            
+            for pos in solenoid_positions:
+                # Solenoid base - bottom cap
+                solenoid_base = Rectangle(
+                    (pos - solenoid_width/2 - 0.001, -y_offset + base_height), 
+                    solenoid_width + 0.002, 
+                    0.001, 
+                    fc=dark_copper, 
+                    ec='black', 
+                    lw=0.5
+                )
+                ax_anim.add_patch(solenoid_base)
+                
+                # Main solenoid body (cylindrical coil)
+                solenoid_body = Rectangle(
+                    (pos - solenoid_width/2, -y_offset + base_height + 0.001), 
+                    solenoid_width, 
+                    solenoid_height, 
+                    fc=copper_color, 
+                    ec='black', 
+                    lw=0.5
+                )
+                ax_anim.add_patch(solenoid_body)
+                
+                # Solenoid top cap - this will be at y=0
+                solenoid_top = Rectangle(
+                    (pos - solenoid_width/2 - 0.001, -0.001), 
+                    solenoid_width + 0.002, 
+                    0.001, 
+                    fc=dark_copper, 
+                    ec='black', 
+                    lw=0.5
+                )
+                ax_anim.add_patch(solenoid_top)
+                
+                # Add coil windings - horizontal lines to indicate wire wraps
+                num_windings = 6
+                winding_spacing = solenoid_height / (num_windings + 1)
+                for i in range(1, num_windings + 1):
+                    y_pos = -y_offset + base_height + 0.001 + i * winding_spacing
+                    winding = plt.Line2D(
+                        [pos - solenoid_width/2, pos + solenoid_width/2],
+                        [y_pos, y_pos],
+                        lw=0.5,
+                        color='black',
+                        alpha=0.7
+                    )
+                    ax_anim.add_line(winding)
+                    
+                # Add core indicator - center line
+                core = plt.Line2D(
+                    [pos, pos],
+                    [-y_offset + base_height + 0.001, -0.001],
+                    lw=1,
+                    color=dark_copper,
+                    alpha=0.8
+                )
+                ax_anim.add_line(core)
+            
+            # Set dimensions for a more realistic magnet that's wider than tall
+            w_body = 0.032    # Width of the cylinder body
+            h_body = 0.006    # Height of the cylinder body
 
-            # Create the cylinder body as a rectangle; note the vertical offset added.
-            cylinder_body = Rectangle((x[0] - w_body/2, (z[0] + float_offset) - h_body/2),
-                                      w_body, h_body, fc='#8B4513', ec='black')
+            # Create the cylinder body as a rectangle
+            # z value is now directly from simulation without additional offset
+            cylinder_body = Rectangle((x[0] - w_body/2, z[0] - h_body/2),
+                                      w_body, h_body, fc='#808080', ec='black')
             ax_anim.add_patch(cylinder_body)
 
             # Top ellipse: simulates the rounded top edge of the cylinder.
             top_width = w_body
-            top_height = 0.007  # Adjust for visual effect.
+            top_height = 0.005  # Reduced height for visual effect
             offset_x_top = - (h_body/2) * np.sin(np.radians(theta[0]))
             offset_y_top = (h_body/2) * np.cos(np.radians(theta[0]))
-            cylinder_top = Ellipse((x[0] + offset_x_top, (z[0] + float_offset) + offset_y_top),
-                                   top_width, top_height, fc='#A0522D', ec='black')
+            cylinder_top = Ellipse((x[0] + offset_x_top, z[0] + offset_y_top),
+                                   top_width, top_height, fc='#707070', ec='black')  # Slightly darker gray
             ax_anim.add_patch(cylinder_top)
 
             # Bottom ellipse: simulates the rounded bottom edge of the cylinder.
             bottom_width = w_body
-            bottom_height = 0.007  # Adjust proportionally.
+            bottom_height = 0.005  # Reduced height
             offset_x_bottom = (h_body/2) * np.sin(np.radians(theta[0]))
             offset_y_bottom = - (h_body/2) * np.cos(np.radians(theta[0]))
-            cylinder_bottom = Ellipse((x[0] + offset_x_bottom, (z[0] + float_offset) + offset_y_bottom),
-                                      bottom_width, bottom_height, fc='#A0522D', ec='black')
+            cylinder_bottom = Ellipse((x[0] + offset_x_bottom, z[0] + offset_y_bottom),
+                                      bottom_width, bottom_height, fc='#707070', ec='black')  # Slightly darker gray
             ax_anim.add_patch(cylinder_bottom)
 
             # Timer text in the top-left corner.
@@ -268,7 +340,7 @@ def interactive_simulation(
                 Initialize the animation by setting the starting positions and orientations.
                 Resets the cylinder and its rounded edges to their initial state.
                 """
-                current_x, current_z = x[0], z[0] + float_offset
+                current_x, current_z = x[0], z[0]
                 current_theta = theta[0]
                 # Create rotation transformation based on the initial theta.
                 trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
@@ -291,12 +363,12 @@ def interactive_simulation(
                 Update positions and rotations for frame i.
 
                 For each frame:
-                  - Update x, z, and theta values; add float_offset to keep the disk elevated.
+                  - Update x, z, and theta values
                   - Adjust the transformation of the cylinder body for its rotation.
                   - Recalculate offsets for the top and bottom ellipses based on the new theta.
                   - Update the timer text.
                 """
-                current_x, current_z = x[i], z[i] + float_offset
+                current_x, current_z = x[i], z[i]
                 current_theta = theta[i]
                 trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
                 cylinder_body.set_xy((current_x - w_body/2, current_z - h_body/2))
@@ -313,8 +385,10 @@ def interactive_simulation(
                 return [cylinder_body, cylinder_top, cylinder_bottom, timer_text]
 
             plt.rcParams['animation.html'] = 'html5'
+            
+            # Adjust the interval to allow for slow motion playback
             ani = animation.FuncAnimation(fig, update, frames=len(t_anim),
-                                          init_func=init, blit=True, interval=dt * 1000)
+                                          init_func=init, blit=True, interval=dt * 2000)
 
             plt.tight_layout()
             plt.close()  # Prevent duplicate figures in the notebook
