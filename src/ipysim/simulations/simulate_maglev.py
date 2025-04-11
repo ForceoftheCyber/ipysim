@@ -3,6 +3,11 @@
 import numpy as np
 from scipy.integrate import odeint
 from ipysim.core import simulate_closed_loop
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.patches import Rectangle, Ellipse
+from matplotlib import transforms
+from IPython.display import HTML, Javascript
 
 # --- Simulation-specific utility functions ---
 def cross2D(a, b):
@@ -139,3 +144,199 @@ def animate_maglev(t, sol):
     """
     from ipysim.plotting import create_animation
     return create_animation(t, sol, draw_frame_maglev, interval=50)
+def create_maglev_detailed_animation(t, sol, state0):
+    """
+    Create a detailed animation of the maglev system.
+    
+    This function uses Matplotlib's FuncAnimation to animate
+    an elaborate visualization including the base, two solenoids with windings,
+    and a magnet represented as a cylinder with rounded edges.
+    
+    Args:
+        t (array-like): The time vector.
+        sol (ndarray): The simulation solution as a 2D array (columns: x, z, theta, ...).
+        state0 (list or array): The initial state; used here to set the vertical axis.
+        
+    Returns:
+        IPython.display.HTML: An HTML object containing the animation.
+    """
+    try:
+        # Downsample simulation data to avoid browser overload.
+        max_frames = 1000
+        if len(t) > max_frames:
+            frame_step = len(t) // max_frames
+            t_anim = t[::frame_step]
+            sol_anim = sol[::frame_step]
+        else:
+            t_anim = t
+            sol_anim = sol
+
+        # Extract state variables.
+        x = sol_anim[:, 0]
+        z = sol_anim[:, 1]
+        theta = sol_anim[:, 2]
+
+        # Create figure and axis.
+        fig = plt.figure(figsize=(8, 6), dpi=80)
+        ax_anim = fig.add_subplot(111)
+
+        # Set up the base and solenoid parameters.
+        base_height = 0.01
+        solenoid_height = 0.012
+        y_offset = base_height + 0.001 + solenoid_height
+
+        ax_anim.set_xlim(-0.06, 0.06)
+        initial_z = state0[1]
+        margin_pct = 0.4
+        ax_anim.set_ylim(-y_offset, initial_z * (1 + margin_pct))
+        ax_anim.set_aspect('equal')
+        ax_anim.set_title('Maglev Animation')
+        ax_anim.grid(False)
+
+        # Draw the static base.
+        base = Rectangle((-0.06, -y_offset), 0.12, base_height, fc='#3a3a3a')
+        ax_anim.add_patch(base)
+
+        # Draw two solenoids.
+        solenoid_positions = [-0.01, 0.01]
+        solenoid_width = 0.009
+        copper_color = '#b87333'
+        dark_copper = '#8c5e28'
+
+        for pos in solenoid_positions:
+            # Draw solenoid base (bottom cap).
+            solenoid_base = Rectangle(
+                (pos - solenoid_width / 2 - 0.001, -y_offset + base_height), 
+                solenoid_width + 0.002, 0.001, 
+                fc=dark_copper, ec='black', lw=0.5
+            )
+            ax_anim.add_patch(solenoid_base)
+            
+            # Draw the main solenoid body.
+            solenoid_body = Rectangle(
+                (pos - solenoid_width / 2, -y_offset + base_height + 0.001), 
+                solenoid_width, solenoid_height, 
+                fc=copper_color, ec='black', lw=0.5
+            )
+            ax_anim.add_patch(solenoid_body)
+            
+            # Draw the solenoid top cap.
+            solenoid_top = Rectangle(
+                (pos - solenoid_width / 2 - 0.001, -0.001), 
+                solenoid_width + 0.002, 0.001, 
+                fc=dark_copper, ec='black', lw=0.5
+            )
+            ax_anim.add_patch(solenoid_top)
+            
+            # Draw coil windings.
+            num_windings = 6
+            winding_spacing = solenoid_height / (num_windings + 1)
+            for i in range(1, num_windings + 1):
+                y_pos = -y_offset + base_height + 0.001 + i * winding_spacing
+                ax_anim.plot(
+                    [pos - solenoid_width/2, pos + solenoid_width/2],
+                    [y_pos, y_pos],
+                    lw=0.5, color='black', alpha=0.7
+                )
+                
+            # Draw the core indicator.
+            core = plt.Line2D(
+                [pos, pos],
+                [-y_offset + base_height + 0.001, -0.001],
+                lw=1, color=dark_copper, alpha=0.8
+            )
+            ax_anim.add_line(core)
+
+        # Draw the magnet as a cylinder with rounded edges.
+        w_body = 0.032
+        h_body = 0.006
+
+        # Cylinder body.
+        cylinder_body = Rectangle(
+            (x[0] - w_body / 2, z[0] - h_body / 2),
+            w_body, h_body, fc='#808080', ec='black'
+        )
+        ax_anim.add_patch(cylinder_body)
+
+        # Top ellipse for the rounded top.
+        top_width = w_body
+        top_height = 0.005
+        offset_x_top = - (h_body / 2) * np.sin(np.radians(theta[0]))
+        offset_y_top = (h_body / 2) * np.cos(np.radians(theta[0]))
+        cylinder_top = Ellipse(
+            (x[0] + offset_x_top, z[0] + offset_y_top),
+            top_width, top_height, fc='#707070', ec='black'
+        )
+        ax_anim.add_patch(cylinder_top)
+
+        # Bottom ellipse for the rounded bottom.
+        bottom_width = w_body
+        bottom_height = 0.005
+        offset_x_bottom = (h_body / 2) * np.sin(np.radians(theta[0]))
+        offset_y_bottom = - (h_body / 2) * np.cos(np.radians(theta[0]))
+        cylinder_bottom = Ellipse(
+            (x[0] + offset_x_bottom, z[0] + offset_y_bottom),
+            bottom_width, bottom_height, fc='#707070', ec='black'
+        )
+        ax_anim.add_patch(cylinder_bottom)
+
+        # Timer text.
+        timer_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes, fontsize=12, color='black')
+
+        # Animation initialization function.
+        def init():
+            current_x, current_z = x[0], z[0]
+            current_theta = theta[0]
+            trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
+            cylinder_body.set_xy((current_x - w_body/2, current_z - h_body/2))
+            cylinder_body.set_transform(trans)
+            offset_x_top = - (h_body/2) * np.sin(current_theta)
+            offset_y_top = (h_body/2) * np.cos(current_theta)
+            cylinder_top.center = (current_x + offset_x_top, current_z + offset_y_top)
+            cylinder_top.angle = np.degrees(current_theta)
+            offset_x_bottom = (h_body/2) * np.sin(current_theta)
+            offset_y_bottom = - (h_body/2) * np.cos(current_theta)
+            cylinder_bottom.center = (current_x + offset_x_bottom, current_z + offset_y_bottom)
+            cylinder_bottom.angle = np.degrees(current_theta)
+            timer_text.set_text("Time: 0.00 s")
+            return [cylinder_body, cylinder_top, cylinder_bottom, timer_text]
+
+        # Animation update function.
+        def update(i):
+            current_x, current_z = x[i], z[i]
+            current_theta = theta[i]
+            trans = transforms.Affine2D().rotate_around(current_x, current_z, current_theta) + ax_anim.transData
+            cylinder_body.set_xy((current_x - w_body/2, current_z - h_body/2))
+            cylinder_body.set_transform(trans)
+            offset_x_top = - (h_body/2) * np.sin(current_theta)
+            offset_y_top = (h_body/2) * np.cos(current_theta)
+            cylinder_top.center = (current_x + offset_x_top, current_z + offset_y_top)
+            cylinder_top.angle = np.degrees(current_theta)
+            offset_x_bottom = (h_body/2) * np.sin(current_theta)
+            offset_y_bottom = - (h_body/2) * np.cos(current_theta)
+            cylinder_bottom.center = (current_x + offset_x_bottom, current_z + offset_y_bottom)
+            cylinder_bottom.angle = np.degrees(current_theta)
+            timer_text.set_text("Time: {:.2f} s".format(t_anim[i]))
+            return [cylinder_body, cylinder_top, cylinder_bottom, timer_text]
+
+        # Create the animation.
+        ani = animation.FuncAnimation(
+            fig, update, frames=len(t_anim), init_func=init, blit=True, interval=50
+        )
+        plt.tight_layout()
+        plt.close(fig)  # Prevent duplicate figures in notebooks.
+
+        # Convert the animation to embeddable HTML.
+        html_anim = ani.to_jshtml(default_mode='once')
+        return HTML(html_anim)
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        return HTML(
+            "<div style='color:red; border:1px solid #ffaaaa; padding:10px; "
+            "background-color:#ffeeee; border-radius:5px;'>"
+            "<h3>Animation Error</h3>"
+            "<p>Failed to render animation: {}</p>"
+            "<details><summary>Error Details</summary><pre>{}</pre></details></div>"
+            .format(str(e), error_details)
+        )
