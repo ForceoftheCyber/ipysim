@@ -170,14 +170,13 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                 if plot_fn:
                     try:
                         with redirect_stderr_to_console():
-                            with redirect_stderr_to_console():  # Double wrapping to ensure capture
-                                # Close any existing figures first
-                                plt.close('all')
-                                # Create new figure and plot
-                                #fig = plt.figure(figsize=(8, 4))
-                                plot_fn(t, sol)
-                                # Show plot and immediately capture any output
-                                plt.show()
+                            # Close any existing figures first
+                            plt.close('all')
+                            # Create new figure and plot
+                            #fig = plt.figure(figsize=(8, 4))
+                            plot_fn(t, sol)
+                            # Show plot and immediately capture any output
+                            plt.show()
                     except Exception as plot_error:
                         with error_out:
                             print("Error plotting simulation results.")
