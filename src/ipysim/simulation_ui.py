@@ -1,7 +1,7 @@
 # ipysim/simulation_ui.py
 
 import matplotlib.pyplot as plt
-from ipywidgets import interact, FloatSlider, Button, Output, VBox, HBox, Checkbox, Label, HTML
+from ipywidgets import interact, FloatSlider, Button, Output, VBox, HBox, Checkbox, Label, HTML, ToggleButton
 from IPython.display import display, Javascript, HTML as IPythonHTML
 import traceback
 import numpy as np
@@ -9,11 +9,11 @@ from .utils import redirect_stderr_to_console
 import inspect
 
 def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluation_function=None,
-                           params=None, state0=None, T=10.0, dt=0.01, sliders_config=None):
+                           params=None, state0=None, T=10.0, dt=0.01, sliders_config=None, with_noise_button=False):
     """
     Create an interactive simulation interface.
     
-    simulate_fn: function(params, state0, T, dt, **slider_values) -> (t, sol)
+    simulate_fn: function(params, state0, T, dt, **control_values) -> (t, sol)
     plot_fn: optional plotting function: plot_fn(t, sol)
     animation_fn: optional animation function: animation_fn(t, sol)
     evaluation_function: optional function for student evaluation: evaluation_function(t, sol) -> bool
@@ -22,6 +22,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
     T: total simulation time
     dt: simulation time step
     sliders_config: dict specifying additional slider configuration
+    with_noise: whether or not the button for adding noise should be displayed.
     """
     params = params or {}
     state0 = state0 or []
@@ -37,9 +38,15 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                                  max=config["max"], step=config["step"],
                                  description=config["description"])
                for name, config in sliders_config.items()}
+
+    if with_noise_button:
+        controls = {**sliders, "noise": ToggleButton(value=False, description="Apply noise")}
+    else:
+        controls = {**sliders}
+
     
     # Store the last valid values for all sliders for rollback
-    last_valid_values = {name: sliders[name].value for name in sliders}
+    last_valid_values = {name: controls[name].value for name in controls}
     
     # Store the last valid simulation results
     last_valid_results = {'t': None, 'sol': None}
@@ -74,13 +81,13 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
             
         return True
     
-    def validate_parameters(**slider_values):
+    def validate_parameters(**control_values):
         """
         Validate controller parameters to prevent computation errors.
         Override this with simulation-specific validation if needed.
         """
         # Basic validation - ensure all values are in their acceptable ranges
-        for name, value in slider_values.items():
+        for name, value in control_values.items():
             slider = sliders.get(name)
             if slider and (value < slider.min or value > slider.max):
                 return False
@@ -91,7 +98,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
         error_container.layout.display = 'flex' if show else 'none'
     
     # Function to run simulation using the current slider values.
-    def run_simulation(**slider_values):
+    def run_simulation(**control_values):
         with out:
             out.clear_output(wait=True)
             
@@ -100,7 +107,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                 error_out.clear_output(wait=True)
                 
             # Validate parameters before running simulation
-            if not validate_parameters(**slider_values):
+            if not validate_parameters(**control_values):
                 # Display error and roll back to last valid values
                 with error_out:
                     print("Invalid parameter values. Rolling back to previous valid settings.")
@@ -109,15 +116,15 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                 # Restore sliders to last valid values without triggering callbacks
                 with redirect_stderr_to_console():
                     for name, value in last_valid_values.items():
-                        if name in sliders:
-                            sliders[name].value = value
+                        if name in controls:
+                            controls[name].value = value
                 return
             
             try:
                 # Run the simulation with current parameters
                 t, sol = None, None
                 with redirect_stderr_to_console():
-                    t, sol = simulate_fn(params, state0, T, dt, **slider_values)
+                    t, sol = simulate_fn(params, state0, T, dt, **control_values)
                 
                 # Validate the solution
                 if not is_valid_solution(sol):
@@ -130,8 +137,8 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                         # Restore sliders to last valid values
                         with redirect_stderr_to_console():
                             for name, value in last_valid_values.items():
-                                if name in sliders:
-                                    sliders[name].value = value
+                                if name in controls:
+                                    controls[name].value = value
                                     
                         # Re-run with last valid parameters if we have them
                         t, sol = last_valid_results['t'], last_valid_results['sol']
@@ -148,7 +155,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                         return
                 else:
                     # Store these as the last valid values and results
-                    for name, value in slider_values.items():
+                    for name, value in control_values.items():
                         if name in last_valid_values:
                             last_valid_values[name] = value
                     
@@ -210,8 +217,8 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                 if had_successful_sim[0]:
                     with redirect_stderr_to_console():
                         for name, value in last_valid_values.items():
-                            if name in sliders:
-                                sliders[name].value = value
+                            if name in controls:
+                                controls[name].value = value
     
     # Animation trigger.
     def run_animation(_):
@@ -274,15 +281,15 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                     show_error(True)
     
     # Helper function to get all current slider values
-    def get_slider_values():
-        return {name: slider.value for name, slider in sliders.items()}
+    def get_control_values():
+        return {name: slider.value for name, slider in controls.items()}
     
     # Add observe callbacks to each slider for real-time updates
     def on_slider_change(change):
-        run_simulation(**get_slider_values())
+        run_simulation(**get_control_values())
     
     # Register callbacks for all sliders
-    for name, slider in sliders.items():
+    for name, slider in controls.items():
         slider.observe(on_slider_change, names='value')
     
     # Create buttons (no Run Simulation button as requested)
@@ -301,8 +308,8 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
         buttons_list.append(eval_button)
     
     # Create UI layout with error output (now hidden by default)
-    controls = HBox([VBox(list(sliders.values()))])
-    ui_elements = [controls]
+    control_layout = HBox([VBox(list(controls.values()))])
+    ui_elements = [control_layout]
     
     # Add buttons row if any buttons exist
     if buttons_list:
@@ -325,6 +332,6 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
     ui = VBox(ui_elements)
     
     # Initial run to show something when UI first appears
-    run_simulation(**get_slider_values())
+    run_simulation(**get_control_values())
     
     display(ui)
