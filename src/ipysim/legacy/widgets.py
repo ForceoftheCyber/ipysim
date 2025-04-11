@@ -24,8 +24,8 @@ import os
 import traceback
 from ipywidgets import interact, FloatSlider, Button, Output, VBox, HTML, HBox
 from IPython.display import display, Javascript, HTML as IPythonHTML
-from ipysim.core import simulate_maglev
-from ipysim.params import params as default_params, state0 as default_state0
+from ipysim.legacy.core import simulate_maglev
+from ipysim.legacy.params import params as default_params, state0 as default_state0
 
 # Globals for external use
 t = None
