@@ -209,8 +209,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                 # Send the actual error details to the console
                 with redirect_stderr_to_console():
                     error_details = traceback.format_exc()
-                    # Uncomment for debugging
-                    # print(f"Simulation error: {str(e)}\n{error_details}")
+                    print(f"Simulation error: {str(e)}\n{error_details}")
                 
                 # Show the error container
                 show_error(True)
@@ -253,6 +252,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                     # Send full error details to console
                     with redirect_stderr_to_console():
                         error_details = traceback.format_exc()
+                        print(f"Simulation error: {str(e)}\n{error_details}")
     
     # Evaluation trigger, if desired.
     def evaluate(_):
