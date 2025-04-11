@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from ipysim.simulations.simulate_maglev import simulate as base_simulate, plot_maglev
+from ipysim.simulations.simulate_maglev import simulate as base_simulate
 
 def simulate_with_noise(params, state0, T, dt, Kp, Kd):
     from ipysim.simulations.simulate_maglev import maglev_measurements as base_meas
@@ -56,28 +56,3 @@ def plot_maglev_with_noise(t, sol):
     plt.legend()
     plt.tight_layout()
     plt.show(block=False)  # Ensure non-blocking behavior to avoid redundant plots
-
-# -------------------------------
-# Interactive Widgets for Testing
-# -------------------------------
-from ipywidgets import interact, FloatSlider, Checkbox
-
-def run_simulation(init_x, init_z, noise):
-    params = {
-        "M": 0.075,
-        "m": 9.375,
-        "l": 0.046,
-        "g": 9.81,
-        "m_support": 0.6250,
-        "k": 0.0377,
-        "J": 0.12e-4,
-        "mu0": 4 * np.pi * 1e-7
-    }
-
-    Kp, Kd = 300.0, 10.0
-    T = 5
-    dt = 0.001
-
-    state0 = [init_x, init_z, 0.0, 0.0, 0.0, 0.0]
-    t, sol = maglev_with_noise_simulation(params, state0=state0, T=T, dt=dt, Kp=Kp, Kd=Kd, noise=noise)
-    plot_maglev_with_noise(t, sol)

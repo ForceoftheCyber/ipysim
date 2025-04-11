@@ -1,7 +1,7 @@
 # ipysim/simulation_ui.py
 
 import matplotlib.pyplot as plt
-from ipywidgets import interact, FloatSlider, Button, Output, VBox, HBox, Checkbox, Label, HTML, ToggleButton
+from ipywidgets import FloatSlider, Button, Output, VBox, HBox, HTML, ToggleButton
 from IPython.display import display, Javascript, HTML as IPythonHTML
 import traceback
 import numpy as np
