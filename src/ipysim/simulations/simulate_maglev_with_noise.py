@@ -55,7 +55,7 @@ def plot_maglev_with_noise(t, sol):
     plt.ylim(0, 0.1)
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    plt.show(block=False)  # Ensure non-blocking behavior to avoid redundant plots
 
 # -------------------------------
 # Interactive Widgets for Testing
@@ -81,10 +81,3 @@ def run_simulation(init_x, init_z, noise):
     state0 = [init_x, init_z, 0.0, 0.0, 0.0, 0.0]
     t, sol = maglev_with_noise_simulation(params, state0=state0, T=T, dt=dt, Kp=Kp, Kd=Kd, noise=noise)
     plot_maglev_with_noise(t, sol)
-
-interact(run_simulation,
-         init_x=FloatSlider(min=-0.01, max=0.01, step=0.001, value=0.0,
-                            description='Initial x', readout_format='.4f'),
-         init_z=FloatSlider(min=0.01, max=0.1, step=0.001, value=0.0443,
-                            description='Initial z', readout_format='.4f'),
-         noise=Checkbox(value=False, description='Enable noise'));
