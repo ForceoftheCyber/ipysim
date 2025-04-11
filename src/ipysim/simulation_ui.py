@@ -88,6 +88,9 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
         """
         # Basic validation - ensure all values are in their acceptable ranges
         for name, value in control_values.items():
+            if name not in sliders:
+                # Skip over controls that are not sliders
+                continue
             slider = sliders.get(name)
             if slider and (value < slider.min or value > slider.max):
                 return False
