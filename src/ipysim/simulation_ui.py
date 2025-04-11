@@ -222,6 +222,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
     
     # Animation trigger.
     def run_animation(_):
+        assert animation_fn
         with anim_out:
             anim_out.clear_output(wait=True)
             if not hasattr(run_simulation, "t") or not hasattr(run_simulation, "sol"):
@@ -253,6 +254,8 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
     
     # Evaluation trigger, if desired.
     def evaluate(_):
+        assert evaluation_function
+
         with eval_out:
             eval_out.clear_output(wait=True)
             if not hasattr(run_simulation, "t") or not hasattr(run_simulation, "sol"):
