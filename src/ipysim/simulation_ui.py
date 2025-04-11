@@ -6,6 +6,7 @@ from IPython.display import display, Javascript, HTML as IPythonHTML
 import traceback
 import numpy as np
 from .utils import redirect_stderr_to_console
+import inspect
 
 def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluation_function=None,
                            params=None, state0=None, T=10.0, dt=0.01, sliders_config=None):
@@ -252,9 +253,17 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
                 show_error(True)
             else:
                 try:
-                    result = False
-                    with redirect_stderr_to_console():
-                        result = evaluation_function(run_simulation.t, run_simulation.sol)
+                    sig = inspect.signature(evaluation_function)
+                    if len(sig.parameters) == 2:
+                        # Try both argument orders
+                        try:
+                            result = evaluation_function(run_simulation.sol, run_simulation.t)
+                        except Exception:
+                            result = evaluation_function(run_simulation.t, run_simulation.sol)
+                    else:
+                        print("Evaluation function must accept exactly 2 arguments.")
+                        return
+
                     if result:
                         print("Evaluation: Correct!")
                     else:
