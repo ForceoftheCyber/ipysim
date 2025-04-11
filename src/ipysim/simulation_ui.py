@@ -25,7 +25,7 @@ def interactive_simulation(simulate_fn, plot_fn=None, animation_fn=None, evaluat
     params = params or {}
     state0 = state0 or []
     
-    # Default slider configuration, for example gains.
+    # Default slider configuration
     if sliders_config is None:
         sliders_config = {
             "Kp": {"default": 100.0, "min": 0.0, "max": 1000.0, "step": 10.0, "description": "Kp"},

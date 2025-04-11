@@ -143,10 +143,10 @@ def animate_maglev(t, sol):
     create_animation function provided by the framework.
     """
     from ipysim.plotting import create_animation
-    return create_animation(t, sol, draw_frame_maglev, interval=50)
-def create_maglev_detailed_animation(t, sol, state0):
+    return create_animation(t, sol, draw_frame_maglev, interval=16.67)
+def create_maglev_animation(t, sol, state0):
     """
-    Create a detailed animation of the maglev system.
+    Create a animation of the maglev system.
     
     This function uses Matplotlib's FuncAnimation to animate
     an elaborate visualization including the base, two solenoids with windings,
