@@ -94,6 +94,12 @@ Depending on the simulation, they will export:
 - A `simulate()` function (the core dynamics)
 - A `plot_*()` function
 - An optional `create_*_animation()` function
+---
+## Function Hierarchy
+![image](/docs/ipysim_functional_hierarchy.png)
+
+## Sequence Diagram of Maglev Example Instance
+![image](/docs/ipysim_sequence_diagram.png)
 
 ---
 
