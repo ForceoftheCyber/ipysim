@@ -104,6 +104,9 @@ Depending on the simulation, they will export:
 
 ---
 
+## Information for contributors and developers
+*See also [CONTRIBUTE.md](CONTRIBUTE.md).*
+
 ## License
 
 MIT License

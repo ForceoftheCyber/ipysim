@@ -14,7 +14,6 @@ dependencies = [
 authors = [
   { name="Jørgen Galdal", email="jorgen.4@live.no" },
   { name="Raviksan Navaratnarajah", email="raviksan@stud.ntnu.no" }
-#   TODO: Add more authors
 ]
 readme = "README.md"
 requires-python = ">=3.8"
