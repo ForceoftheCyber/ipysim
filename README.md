@@ -39,6 +39,7 @@ pip install ipysim
 ---
 
 ## Quickstart Example
+*See also [examples/maglev_dynamical_system_simulation.ipynb](examples/maglev_dynamical_system_simulation.ipynb) for example usage.*
 
 Here is a minimal working example to get started with **ipysim**:
 
